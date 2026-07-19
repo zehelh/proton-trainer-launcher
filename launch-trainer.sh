@@ -7,7 +7,6 @@ set -euo pipefail
 
 TRAINER_PATH="/mnt/500Go-S850/Cheat/Aurora/Aurora.exe"
 STEAM_APPS="$HOME/.local/share/Steam/steamapps"
-COMPAT_TOOLS="$HOME/.local/share/Steam/compatibilitytools.d"
 
 COLOR_RESET='\033[0m'
 COLOR_GREEN='\033[32m'
@@ -43,30 +42,8 @@ get_game_name() {
 detect_proton_version() {
     local app_id=$1
     local compat_data="$STEAM_APPS/compatdata/$app_id"
-    local version_file="$compat_data/version"
-    
-    if [[ ! -f $version_file ]]; then
-        return 1
-    fi
-    
-    local version_info
-    version_info=$(cat "$version_file")
-    
-    if [[ $version_info =~ GE-Proton([0-9]+-[0-9]+) ]]; then
-        local ge_version="GE-Proton${BASH_REMATCH[1]}"
-        local ge_path="$COMPAT_TOOLS/$ge_version"
-        if [[ -d $ge_path ]]; then
-            echo "$ge_path"
-            return 0
-        fi
-    fi
-    
-    if [[ -d "$COMPAT_TOOLS/proton-cachyos-10.0-20251126-slr-x86_64_v4" ]]; then
-        echo "$COMPAT_TOOLS/proton-cachyos-10.0-20251126-slr-x86_64_v4"
-        return 0
-    fi
-    
-    return 1
+    compat_tool="$(sed '3!d' "$compat_data"/config_info)"
+    echo "${compat_tool:0:-11}"
 }
 
 launch_trainer() {
