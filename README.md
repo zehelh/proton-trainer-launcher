@@ -11,7 +11,7 @@ proton-trainer is a neutral gateway: it bundles and distributes no
 trainers and monetizes nothing. What you launch is your choice and
 your responsibility.
 
-> **Status: v0.1.1-dev — GUI rewrite.** The application now has a
+> **Status: v1.0.0 — trainer launcher.** The application now has a
 > graphical interface (Tauri 2). Steam discovery, the memory engine,
 > trainer definitions, and packaging are unchanged; the headless CLI
 > subcommands remain. Trainer definitions for real games are community

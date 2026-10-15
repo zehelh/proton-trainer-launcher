@@ -5,201 +5,106 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-10-15
 
 ### Added
 
-- Game detail view: an Information card showing the game's real
-  install path and the compatibility tool it runs with (Steam's
-  `CompatToolMapping` / Heroic's configured Wine or Proton), with a
-  GE-Proton recommendation when the tool is not a GE build —
-  GE-Proton ships the more permissive defaults trainers need.
-- Heroic sideloaded games now show their real title and install
-  path, read from `sideload_apps/library.json` (prefix-holder
-  entries stay excluded by prefix name).
-- Configurable game start wait: `game_wait_secs` in `config.toml`
-  (default 90 s) sets how long a trainer launch waits for the game
-  to actually start before the trainer connects — Steam's launch
-  reaper or Heroic's game executable. On Heroic, a timeout now
-  aborts with a clear error instead of risking the old deadlock;
-  editable in the Configuration tab.
-- Games list: a search field and a source filter (built from the
-  stores actually present — Steam, Heroic, ...).
-- Heroic configuration-only entries whose prefix marks them as a
-  shared-prefix holder (conventional name "shared") are excluded
-  from the game list.
-- Configurable protonhax wait: `protonhax_wait_secs` in `config.toml`
-  (default 10, `0` checks once without waiting) sets how long a
-  trainer launch waits for the game's protonhax environment before
-  falling back to a direct prefix run; editable in the Configuration
-  tab.
+- Trainer launcher mode: any number of **global trainers** (Aurora,
+  WeMod, xModHub, ...) and per-game trainers (e.g. a FLiNG trainer)
+  managed in the Configuration tab; every game can be launched plain
+  or with a trainer, which runs inside the game's own Wine/Proton
+  prefix. Stored in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
+- Heroic game discovery: Epic (legendary), GOG, and configured
+  games, native and Flatpak, with per-game Wine prefix and binary
+  detection; sideloaded games show their real title and install
+  path, read from `sideload_apps/library.json`. Shared-prefix
+  holder entries are excluded from the game list.
+- The game list shows every installed game from every store (Steam
+  runtimes and redistributables filtered out), with a search field
+  and a source filter.
+- Game detail view: an Information card with the game's install
+  path and the compatibility tool it runs with, plus a GE-Proton
+  recommendation when the tool is not a GE build (GE-Proton ships
+  the more permissive defaults external trainers need).
+- Two configurable timeouts in the Configuration tab: the **game
+  start wait** (`game_wait_secs`, default 90 s — how long to wait
+  for the launched game to actually start before connecting the
+  trainer) and the **protonhax wait** (`protonhax_wait_secs`,
+  default 10 s, `0` = a single check — how long a Steam launch
+  waits for the game's protonhax environment before falling back
+  to a direct prefix run).
+- File logging: app events, launch steps, and trainer output are
+  appended to `~/.local/state/proton-trainer/proton-trainer.log`;
+  store-client output (Heroic) is captured there too.
+
+### Changed
+
+- proton-trainer is now a **neutral launcher gateway**: it bundles
+  and distributes no trainers, monetizes nothing, and adds no
+  anti-cheat policy on top of the user's choices when launching
+  external trainers. The denylist still applies to the native
+  memory engine's own writes.
+- The application is now a Tauri 2 **graphical interface** instead
+  of a terminal UI: game list, trainer entries, dry-run plan, and
+  apply results as screens, heavy operations on a worker thread.
+  `pt-tui` and `pt-cli` are removed; the new `pt-session` crate
+  holds the workflow shared by the GUI and the headless CLI
+  subcommands (`list`, `attach`, `apply`).
+- Packaging: the AppImage is produced by the Tauri bundler in the
+  release workflow; AUR packages gained the `gtk3`/`webkit2gtk-4.1`
+  runtime dependencies and no longer install an examples directory.
+- CI: `cargo doc` (warnings denied) and `cargo-deny` jobs; the
+  release gate runs the full tooling set (fmt, clippy, tests, doc,
+  deny) since tag pushes do not trigger the main CI, and fails
+  loudly when the tag, `Cargo.toml`, and `tauri.conf.json` versions
+  disagree.
 
 ### Removed
 
 - The bundled example trainer definitions (`trainers/`): two were
   placeholder patterns and the third only targeted the integration
   test binary, which never ships. The README's TOML block remains
-  the schema reference. The release tarball and both AUR packages
-  no longer install an examples directory.
-
-### Changed
-
-- CI: `cargo doc` (warnings denied) and `cargo-deny` jobs added; the
-  release gate now runs the FULL tooling set (fmt, clippy, tests,
-  doc, deny) since tag pushes do not trigger the main CI, and it
-  fails loudly when the tag, `Cargo.toml`, and `tauri.conf.json`
-  versions disagree (the AppImage is named after the latter). Tauri
-  system dependencies align with the official docs (`libxdo-dev` on
-  Ubuntu, `pkgconf` in the Arch container).
-- The game detail view no longer shows the Wine prefix path, only
-  the source.
-- The source filter is styled like the other inputs (the WebKit
-  native look was left in place before).
+  the schema reference.
 
 ### Fixed
 
-- Heroic trainers wait for the game's WINESERVER SOCKET
-  (`/tmp/.wine-<uid>/server-<dev>-<inode>/socket`) instead of just a
-  related process: the process check matched umu-run seconds before
-  the game's wine owned the prefix, so the trainer still created a
-  competing host-side wineserver and the game blocked until the
-  trainer closed.
-
-### Fixed
-
-- Heroic Proton trainers now connect to the game's wineserver as a
+- Steam trainers run INSIDE the game's container via protonhax
+  (`protonhax run <appid> <exe>`, requires `protonhax init
+  %command%` in the game's launch options): a trainer spawned
+  outside the Steam Linux Runtime container died within seconds
+  even in the same prefix. Without protonhax the app falls back to
+  a direct prefix run, warns in the GUI and the log, and suggests
+  the exact corrected launch options read from `localconfig.vdf`.
+- Steam launch-with-trainer waits for the game to actually start
+  (Steam's `SteamLaunch AppId=<id>` reaper), re-sending the
+  `steam://rungameid` URL every 20 seconds to force the launch, and
+  resolves the game's actual compatibility tool (per-game
+  `CompatToolMapping` entry, else Steam's default tool) with
+  prefix-tolerant directory matching and the full Steam compat
+  environment — the wrong Proton used to try upgrading the game's
+  prefix.
+- Heroic games launch through the `heroic://launch?appName=<id>`
+  protocol URL (Heroic 2.22+ ignores a `launch <app>` CLI command);
+  `gui=false` keeps the Heroic window hidden.
+- Heroic trainers get the full Steam compat environment
+  (`STEAM_COMPAT_DATA_PATH` — Proton ignores `WINEPREFIX` and
+  exited with "No compat data path?" before) and fail fast with a
+  clear error when the configured Wine/Proton binary no longer
+  exists.
+- Heroic store clients are spawned with `ELECTRON_RUN_AS_NODE`
+  stripped — the variable leaks from IDE terminals and crashed the
+  Heroic CLI with "Cannot find module 'electron'".
+- Heroic trainers connect to the game's wineserver as a plain
   client: the app waits until the game executable actually starts
-  (umu's `proton waitforexitandrun <exe>` chain) and then runs the
-  trainer with the game's Proton in `run` mode. The umu-run attempt
-  was wrong: umu also launches through `waitforexitandrun`, whose
-  `wineserver -w` waits for the game's server to die, so the trainer
-  only opened after the game closed. Verified live: game and trainer
-  coexist on the one shared wineserver.
-- Heroic Proton trainers now wait for the game EXECUTABLE to run
-  (detecting umu's `proton waitforexitandrun <exe>` chain) instead
-  of the wineserver socket: the socket appears during the prefix
-  setup, and a trainer launched then raced the game's proton for
-  the prefix and blocked the game. Full flow verified live: game
-  via the heroic:// protocol, trainer via umu-run once the game
-  executable is running — both coexist indefinitely.
-- Heroic Proton trainers now run through `umu-run`, in their own
-  umu/pressure-vessel container with the game's environment
-  (`UMU_ID`/`WINEPREFIX`/`PROTONPATH`) — the same topology as the
-  game itself. Verified live: the game and a umu-run trainer
-  coexist, while a trainer spawned next to the game (host-side
-  Proton, even after waiting for the game's wineserver socket)
-  deadlocked the game until the trainer was closed. Falls back to
-  the direct prefix run with a warning when umu-run is missing;
-  plain-Wine Heroic games keep the WINEPREFIX flow.
-- Heroic trainers no longer block the game: the game is now started
-  first and waited for (up to 90 s, detecting its umu/wine process
-  by prefix or install path) before the trainer connects. Heroic
-  runs Proton games through umu inside a pressure-vessel container;
-  a trainer started first created a host-side wineserver for the
-  same prefix and the in-container game then waited on it until the
-  trainer closed.
-- Heroic games now actually launch: Heroic 2.22+ ignores a
-  `launch <app>` CLI command — launches are requested through the
-  `heroic://launch?appName=<id>&gui=false` protocol URL, which also
-  keeps the Heroic window hidden when launched from proton-trainer.
-- Heroic games configured with Proton now get the full Steam compat
-  environment for the trainer (`STEAM_COMPAT_DATA_PATH` — Heroic's
-  `winePrefix` is a compatdata directory, Proton derives the Wine
-  prefix as `<dir>/pfx` — plus client path and app id). Proton
-  ignores `WINEPREFIX` and exited with "No compat data path?" before,
-  so the trainer never started; plain-Wine Heroic games keep
-  `WINEPREFIX`.
-- Heroic launches: the store client is now spawned with
-  `ELECTRON_RUN_AS_NODE` stripped (leaking from IDE terminals, it
-  made the Heroic CLI crash with "Cannot find module 'electron'")
-  and with its output appended to the log file, so launch failures
-  are diagnosable. Launching a game with a trainer also fails fast
-  with a clear error when the game's configured Wine/Proton binary
-  no longer exists (e.g. a deleted `Proton-GE Latest` build) —
-  re-select a version in Heroic's game settings.
-- Steam trainers now run INSIDE the game's container via protonhax
-  (`protonhax run <appid> <exe>`). Games under the Steam Linux Runtime
-  run in a pressure-vessel/bwrap container; a trainer spawned outside
-  it died within seconds (`Some threads failed to suspend`) even in
-  the same prefix. Requires `protonhax init %command%` in the game's
-  Steam launch options; without it the app falls back to a direct
-  prefix run and surfaces a warning in the GUI and the log.
-- The warning shown on the direct-prefix fallback now reads the
-  game's actual Steam launch options (`localconfig.vdf`) and suggests
-  the exact corrected options (e.g. `PROTON_FSR4_UPGRADE=1
-  protonhax init %command%`); the log also traces the start of the
-  protonhax environment wait (up to 30 s) instead of going silent.
-
-- Launch with trainer now WAITS for the game to actually start before
-  running the trainer (detecting Steam's `SteamLaunch AppId=<id>`
-  reaper process): the trainer used to enter the prefix 47 ms after
-  the URL was sent, racing the game's launch. While the game has not
-  appeared, the `steam://rungameid` URL is re-sent every 20 seconds
-  (Steam ignores duplicates) to force the launch; an already-running
-  game is detected instantly; after 90 seconds the trainer starts
-  anyway with a warning in the log.
-
-- Launch with trainer: games without an explicit compat-tool override
-  now resolve to Steam's **default tool** (`CompatToolMapping` key
-  `"0"`) instead of the newest custom tool — running a trainer with
-  the wrong Proton made it try to upgrade the game's prefix.
-- Tool names that do not match their directory (e.g. Steam's
-  `GE-Proton11-7-x86_64` vs the directory `GE-Proton11-7`) now
-  resolve prefix-tolerantly.
-- The trainer's Proton environment now includes
-  `STEAM_COMPAT_CLIENT_INSTALL_PATH` and `STEAM_COMPAT_APP_ID`
-  (modern Proton crashes without the former).
-
+  (umu's `proton waitforexitandrun <exe>` chain), then runs the
+  trainer with the game's Proton in `run` mode. Every earlier
+  topology deadlocked the pair — umu launches serialize on a
+  prefix (`wineserver -w`), so a trainer started before or
+  alongside the game blocked it until the trainer closed. Verified
+  live: game and trainer coexist on the one shared server.
 - GUI: adding a global trainer or linking a trainer to a game now
-  refreshes the list immediately (void commands resolved to `null`,
-  which the frontend mistook for failure).
-- Launch with trainer: Proton is now looked up in the **primary**
-  Steam installation (compatibility tools and `config.vdf` never live
-  in secondary libraries), fixing trainer launches for games installed
-  on other disks; official Protons in the game's own library are also
-  found; `STEAM_COMPAT_DATA_PATH` is set alongside `WINEPREFIX`.
-
-### Added
-
-- File logging: app events and trainer output are appended to
-  `~/.local/state/proton-trainer/proton-trainer.log` (stderr output is
-  kept for terminal launches); launch steps (game, prefix, Proton,
-  trainer command line and pid) are logged so failures are
-  diagnosable after the fact.
-
-- Trainer launcher mode: a Configuration tab manages any number of
-  **global trainers** (Aurora, WeMod, xModHub, ...) and per-game
-  trainers (e.g. FLiNG); each game can be launched plain, with a global
-  trainer, or with a per-game trainer, which runs inside the game's
-  own Wine/Proton prefix (no Steam launch-options editing needed).
-  Configuration lives in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
-- Heroic game discovery (Epic via legendary, GOG, plus configured
-  games), native and Flatpak, with per-game Wine prefix and binary
-  detection; Heroic games launch through the Heroic CLI.
-- The game list now shows every installed game from every store
-  (Steam runtimes and redistributables filtered out), with the store
-  as a badge.
-- Proton detection for Steam games: per-game mapping from
-  `config.vdf` (`CompatToolMapping`), newest custom tool in
-  `compatibilitytools.d`, or official Protons in `steamapps/common`;
-  first-run prefixes are awaited for up to two minutes.
-
-### Changed
-
-- proton-trainer is now a **neutral launcher gateway**: it bundles
-  and distributes no trainers and adds no anti-cheat policy when
-  launching external trainers (the denylist still applies to the
-  native memory engine's own writes).
-- The application is now a Tauri 2 **graphical interface** (window)
-  instead of a terminal UI: game list, trainer entries, dry-run plan,
-  and apply results as screens; heavy operations run on a worker
-  thread so the window never freezes. `pt-tui` and `pt-cli` are
-  removed; the new `pt-session` crate holds the workflow shared by
-  the GUI and the headless CLI subcommands (`list`, `attach`,
-  `apply`), which remain unchanged.
-- Packaging: the AppImage is now produced by the Tauri bundler in the
-  release workflow (the linuxdeploy packaging is gone); AUR packages
-  gained the `gtk3`/`webkit2gtk-4.1` runtime dependencies.
+  refreshes the list immediately (void commands resolved to
+  `null`, which the frontend mistook for failure).
 
 ## [0.1.0] - 2026-10-15
 

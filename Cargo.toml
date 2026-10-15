@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 # MSRV policy: current stable minus two minor versions.
 rust-version = "1.97"
@@ -43,10 +43,10 @@ tauri-plugin-dialog = "2"
 tauri-build = "2"
 tempfile = "3"
 
-pt-core = { path = "crates/pt-core", version = "0.1.0" }
-pt-discover = { path = "crates/pt-discover", version = "0.1.0" }
-pt-session = { path = "crates/pt-session", version = "0.1.0" }
-pt-trainers = { path = "crates/pt-trainers", version = "0.1.0" }
+pt-core = { path = "crates/pt-core", version = "1.0.0" }
+pt-discover = { path = "crates/pt-discover", version = "1.0.0" }
+pt-session = { path = "crates/pt-session", version = "1.0.0" }
+pt-trainers = { path = "crates/pt-trainers", version = "1.0.0" }
 
 [profile.release]
 lto = "thin"
