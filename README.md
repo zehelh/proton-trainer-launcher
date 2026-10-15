@@ -63,8 +63,7 @@ yay -S proton-trainer      # builds from source
 yay -S proton-trainer-bin  # prebuilt binary from the GitHub release
 ```
 
-Both packages install the binary to `/usr/bin/proton-trainer` and the
-example trainer definitions to `/usr/share/proton-trainer/trainers/`.
+Both packages install the binary to `/usr/bin/proton-trainer`.
 The `-bin` package tracks the GitHub releases; the sha256 is checked
 against the release's `SHA256SUMS`.
 
@@ -171,9 +170,9 @@ freeze = true
 
 Values support `i32`, `i64`, `f32`, `f64`, and raw `bytes` (hex).
 Definitions are validated strictly: unknown keys, duplicate ids, and
-malformed patterns are rejected with clear errors. The examples in
-[`trainers/`](trainers/) include a fully working one for the test
-dummy target; the others use placeholder patterns by design.
+malformed patterns are rejected with clear errors. No example
+definitions ship with the app — the TOML above is the schema
+reference.
 
 ### Anti-cheat policy
 

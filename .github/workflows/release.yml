@@ -60,10 +60,9 @@ jobs:
           cargo build --release --workspace
           VERSION="${GITHUB_REF_NAME#v}"
           STAGE="proton-trainer-${VERSION}-x86_64"
-          mkdir -p "dist/${STAGE}/trainers"
+          mkdir -p "dist/${STAGE}"
           cp target/release/proton-trainer "dist/${STAGE}/"
           cp LICENSE README.md "dist/${STAGE}/"
-          cp trainers/*.toml "dist/${STAGE}/trainers/"
           tar -czf "dist/${STAGE}.tar.gz" -C dist "${STAGE}"
 
       - name: Build AppImage (tauri bundler)

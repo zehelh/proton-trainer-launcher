@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   falling back to a direct prefix run; editable in the Configuration
   tab.
 
+### Removed
+
+- The bundled example trainer definitions (`trainers/`): two were
+  placeholder patterns and the third only targeted the integration
+  test binary, which never ships. The README's TOML block remains
+  the schema reference. The release tarball and both AUR packages
+  no longer install an examples directory.
+
 ### Changed
 
 - CI: `cargo doc` (warnings denied) and `cargo-deny` jobs added; the

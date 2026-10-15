@@ -23,9 +23,6 @@ package() {
     install -Dm644 LICENSE \
         "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 
-    install -d "${pkgdir}/usr/share/proton-trainer/trainers"
-    install -Dm644 trainers/*.toml \
-        "${pkgdir}/usr/share/proton-trainer/trainers/"
 
     install -Dm644 README.md \
         "${pkgdir}/usr/share/doc/${pkgname}/README.md"
