@@ -17,9 +17,18 @@
 - After each milestone: update docs and CHANGELOG.md (Keep a Changelog format).
 
 
-Open-source Linux game trainer for SINGLE-PLAYER games running under Steam
-Proton/Wine. Written in Rust. No anti-cheat bypass. Online/competitive games
-are out of scope, forever.
+Open-source trainer LAUNCHER and native trainer for Linux: proton-trainer
+detects installed games (Steam — all library disks, native and Flatpak —
+and Heroic), and launches them with the external trainer of the user's
+choice (Aurora, WeMod, xModHub, FLiNG, ...) running inside the game's own
+Proton/Wine prefix. A native TOML trainer engine (pattern scan, verified
+writes, freeze) covers trainers we author ourselves. Written in Rust.
+
+Launcher policy: proton-trainer is a neutral gateway. It bundles and
+distributes NO trainers, monetizes nothing, and adds no anti-cheat
+policy on top of the user's own choices when launching external
+trainers. The anti-cheat denylist below applies to the NATIVE engine
+only (our own memory writes), where it is non-negotiable.
 
 ## Compatibility targets (priority order)
 1. CachyOS (Arch-based, x86_64) — primary dev/test machine.
@@ -55,9 +64,11 @@ are out of scope, forever.
   writing. Writes require `--apply`.
 - Never write outside the target process's mapped regions. Never touch kernel
   structures, other processes, or /proc besides the target.
-- Anti-cheat deny-list: refuse to attach to processes whose exe name matches
-  known anti-cheat components (EAC, BattlEye, vanguard, etc.). REFUSE, never
-  bypass. Maintained in pt-trainers/denylist.toml.
+- Anti-cheat deny-list (native engine only): refuse to attach to processes
+  whose exe name matches known anti-cheat components (EAC, BattlEye,
+  vanguard, etc.). REFUSE, never bypass. Maintained in
+  pt-trainers/denylist.toml. Launching EXTERNAL trainers (the launcher
+  half) is the user's responsibility; we neither police nor bypass.
 - Document for every write function: signal safety, error modes, restore path.
 
 ## Tests (this project lives or dies by them)

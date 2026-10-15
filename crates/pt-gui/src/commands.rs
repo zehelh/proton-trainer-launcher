@@ -5,14 +5,16 @@
 //! Wine games) on a blocking thread, so the window never freezes; the
 //! frontend gets a promise and can show a spinner meanwhile.
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use pt_session::launch::{launch_game, launch_with_trainer};
 use pt_session::types::{ApplyResult, AttachOutcome, GameRow, PlanRowView};
-use pt_session::LiveSession;
+use pt_session::{AppConfig, LiveSession};
 
 use crate::GuiState;
 
-/// Lists the installed games that have trainer definitions.
+/// Lists every installed game from every store.
 #[tauri::command]
 pub async fn list_games(state: tauri::State<'_, GuiState>) -> Result<Vec<GameRow>, String> {
     run_blocking(&state, |session| session.games()).await
@@ -67,6 +69,38 @@ pub async fn stop_session(state: tauri::State<'_, GuiState>) -> Result<(), Strin
         Ok(())
     })
     .await
+}
+
+/// Loads the user configuration (global trainers, per-game trainers).
+#[tauri::command]
+pub async fn get_config() -> Result<AppConfig, String> {
+    AppConfig::load()
+}
+
+/// Validates and saves the whole user configuration.
+#[tauri::command]
+pub async fn save_config(config: AppConfig) -> Result<(), String> {
+    AppConfig::save_to(&AppConfig::path()?, &config)
+}
+
+/// Launches a game without any trainer.
+#[tauri::command]
+pub async fn launch(row: GameRow) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || launch_game(&row))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+/// Launches a game and runs the trainer in its Wine/Proton prefix.
+/// Blocking (waits for the prefix on first runs), hence the worker
+/// thread.
+#[tauri::command]
+pub async fn launch_trainer(row: GameRow, trainer_path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        launch_with_trainer(&row, Path::new(&trainer_path))
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 /// Runs `work` with the session lock on a blocking thread.

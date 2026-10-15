@@ -7,8 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Trainer launcher mode: a Configuration tab manages any number of
+  **global trainers** (Aurora, WeMod, xModHub, ...) and per-game
+  trainers (e.g. FLiNG); each game can be launched plain, with a global
+  trainer, or with a per-game trainer, which runs inside the game's
+  own Wine/Proton prefix (no Steam launch-options editing needed).
+  Configuration lives in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
+- Heroic game discovery (Epic via legendary, GOG, plus configured
+  games), native and Flatpak, with per-game Wine prefix and binary
+  detection; Heroic games launch through the Heroic CLI.
+- The game list now shows every installed game from every store
+  (Steam runtimes and redistributables filtered out), with the store
+  as a badge.
+- Proton detection for Steam games: per-game mapping from
+  `config.vdf` (`CompatToolMapping`), newest custom tool in
+  `compatibilitytools.d`, or official Protons in `steamapps/common`;
+  first-run prefixes are awaited for up to two minutes.
+
 ### Changed
 
+- proton-trainer is now a **neutral launcher gateway**: it bundles
+  and distributes no trainers and adds no anti-cheat policy when
+  launching external trainers (the denylist still applies to the
+  native memory engine's own writes).
 - The application is now a Tauri 2 **graphical interface** (window)
   instead of a terminal UI: game list, trainer entries, dry-run plan,
   and apply results as screens; heavy operations run on a worker

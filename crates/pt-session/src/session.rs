@@ -12,7 +12,7 @@ use pt_discover::{scan, ScanOptions};
 use pt_trainers::loader::load_dir;
 use pt_trainers::{Denylist, Entry, Refusal, Trainer};
 
-use crate::types::{ApplyResult, AttachOutcome, GameRow, PlanRow};
+use crate::types::{ApplyResult, AttachOutcome, GameRow, GameStore, PlanRow};
 
 /// A successful attach: the trainer and its located target.
 #[derive(Debug, Clone)]
@@ -122,30 +122,65 @@ pub fn attach_outcome(report: &AttachReport) -> AttachOutcome {
     }
 }
 
-/// Lists the installed games that have trainer definitions.
+/// Steam app ids that are runtimes and redistributables, not games.
+const IGNORED_STEAM_APP_IDS: &[u32] = &[
+    228980,  // Steamworks Common Redistributables
+    1070560, // Steam Linux Runtime 1.0 (scout)
+    1391110, // Steam Linux Runtime 2.0 (soldier)
+    1628350, // Proton EasyAntiCheat Runtime
+    1161040, // Proton BattlEye Runtime
+    1826350, // Steam Linux Runtime 3.0 (sniper)
+    961879,  // Proton 6.3 runtime
+];
+
+/// Lists every installed game from every store (Steam libraries —
+/// including secondary disks — and Heroic), with per-game launch data.
 ///
 /// # Errors
 ///
-/// Returns a human-readable message on Steam discovery or trainer
-/// loading failures.
-pub fn games_with_trainers(trainers_dir: &Path) -> Result<Vec<GameRow>, String> {
+/// Returns a human-readable message on Steam or Heroic discovery
+/// failures.
+pub fn all_games(trainers_dir: &Path) -> Result<Vec<GameRow>, String> {
     let trainers = load_trainers(trainers_dir)?;
     let options = ScanOptions::from_default_roots().map_err(|error| error.to_string())?;
     let result = scan(&options).map_err(|error| error.to_string())?;
-    let rows = result
+
+    let mut rows: Vec<GameRow> = result
         .games
         .iter()
-        .filter_map(|game| {
-            let trainer = trainers
+        .filter(|game| !IGNORED_STEAM_APP_IDS.contains(&game.app_id))
+        .map(|game| GameRow {
+            store: GameStore::Steam,
+            id: game.app_id.to_string(),
+            name: game.name.clone(),
+            native_trainer: trainers
                 .iter()
-                .find(|trainer| trainer.steam_app_id == game.app_id)?;
-            Some(GameRow {
-                app_id: game.app_id,
-                name: game.name.clone(),
-                trainer_id: trainer.id.clone(),
-            })
+                .find(|trainer| trainer.steam_app_id == game.app_id)
+                .map(|trainer| trainer.id.clone()),
+            wine_prefix: game
+                .compatdata
+                .as_ref()
+                .map(|c| c.prefix.join("pfx").to_string_lossy().to_string()),
+            wine_bin: None,
+            steamapps: Some(game.steamapps_dir.to_string_lossy().to_string()),
         })
-        .collect::<Vec<_>>();
+        .collect();
+
+    for heroic in pt_discover::scan_heroic().map_err(|error| error.to_string())? {
+        rows.push(GameRow {
+            store: GameStore::Heroic,
+            id: heroic.app_name,
+            name: heroic.title,
+            native_trainer: None,
+            wine_prefix: heroic
+                .wine_prefix
+                .map(|prefix| prefix.to_string_lossy().to_string()),
+            wine_bin: heroic.wine_bin.map(|bin| bin.to_string_lossy().to_string()),
+            steamapps: None,
+        });
+    }
+
+    rows.sort_by_key(|row| row.name.to_lowercase());
     Ok(rows)
 }
 
@@ -271,13 +306,13 @@ impl LiveSession {
         })
     }
 
-    /// Lists the installed games that have trainer definitions.
+    /// Lists every installed game from every store.
     ///
     /// # Errors
     ///
-    /// See [`games_with_trainers`].
+    /// See [`all_games`].
     pub fn games(&self) -> Result<Vec<GameRow>, String> {
-        games_with_trainers(&self.trainers_dir)
+        all_games(&self.trainers_dir)
     }
 
     /// Attaches to the game covered by `trainer_id`. Never writes.

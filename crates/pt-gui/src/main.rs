@@ -117,6 +117,7 @@ fn run_gui(trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let state: GuiState = Arc::new(Mutex::new(session));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::clone(&state))
         .invoke_handler(tauri::generate_handler![
             commands::list_games,
@@ -124,6 +125,10 @@ fn run_gui(trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
             commands::plan,
             commands::apply,
             commands::stop_session,
+            commands::get_config,
+            commands::save_config,
+            commands::launch,
+            commands::launch_trainer,
         ])
         .run(tauri::generate_context!())
         .context("the GUI event loop failed")?;

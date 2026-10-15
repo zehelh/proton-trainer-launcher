@@ -9,24 +9,67 @@
   <body>
     <header>
       <h1>proton-trainer</h1>
-      <div class="subtitle">single-player Steam games under Proton</div>
+      <nav class="tabs">
+        <button id="tab-games" class="tab active">Games</button>
+        <button id="tab-config" class="tab">Configuration</button>
+      </nav>
     </header>
 
     <main>
-      <!-- Games list -->
+      <!-- Games -->
       <section id="screen-games" class="screen">
-        <h2>Installed games with trainers</h2>
+        <h2>Installed games</h2>
         <ul id="game-list" class="list"></ul>
         <p id="games-empty" class="hidden note">
-          No installed games with trainer definitions found. Add
-          trainer files to the trainers directory and click Refresh.
+          No games found in your Steam libraries or Heroic.
         </p>
         <div class="actions">
           <button id="refresh">Refresh</button>
         </div>
       </section>
 
-      <!-- Entries of the attached trainer -->
+      <!-- Game detail -->
+      <section id="screen-detail" class="screen hidden">
+        <div class="detail-head">
+          <h2 id="detail-title">Game</h2>
+          <div id="detail-sub" class="note"></div>
+        </div>
+
+        <div class="card">
+          <h3>Launch</h3>
+          <div class="actions">
+            <button id="launch-plain" class="primary">Launch</button>
+            <span class="note">without a trainer</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Launch with a trainer</h3>
+          <ul id="trainer-list" class="list"></ul>
+          <p id="no-trainers" class="note hidden">
+            No trainers configured. Add global trainers in the
+            Configuration tab, or link a trainer file to this game
+            below.
+          </p>
+          <div class="actions">
+            <button id="link-trainer">Link a trainer file…</button>
+          </div>
+        </div>
+
+        <div class="card" id="native-card">
+          <h3>Native trainer definition</h3>
+          <p id="native-note" class="note"></p>
+          <div class="actions">
+            <button id="native-open">Attach / plan / apply</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="back-to-games">Back to games</button>
+        </div>
+      </section>
+
+      <!-- Native trainer flow: entries -->
       <section id="screen-entries" class="screen hidden">
         <h2 id="entries-title">Entries</h2>
         <div id="entries-target" class="note"></div>
@@ -34,11 +77,11 @@
         <div class="actions">
           <button id="plan-selected">Dry-run plan</button>
           <button id="apply-selected" class="primary">Apply</button>
-          <button id="back-to-games">Back</button>
+          <button id="back-to-detail-from-entries">Back</button>
         </div>
       </section>
 
-      <!-- Dry-run plan -->
+      <!-- Native trainer flow: plan -->
       <section id="screen-plan" class="screen hidden">
         <h2>Dry-run plan (nothing has been written)</h2>
         <pre id="plan-text"></pre>
@@ -48,7 +91,7 @@
         </div>
       </section>
 
-      <!-- Apply results -->
+      <!-- Native trainer flow: results -->
       <section id="screen-result" class="screen hidden">
         <h2>Apply results</h2>
         <ul id="result-list" class="list"></ul>
@@ -58,7 +101,31 @@
         </div>
       </section>
 
-      <!-- Banner (errors, refusals, status) -->
+      <!-- Configuration -->
+      <section id="screen-config" class="screen hidden">
+        <h2>Global trainers</h2>
+        <p class="note">
+          Trainers usable with any game (Aurora, WeMod, xModHub, …).
+          proton-trainer bundles and distributes no trainers; it launches
+          what you point it at.
+        </p>
+        <ul id="config-trainer-list" class="list"></ul>
+
+        <h3>Add a trainer</h3>
+        <div class="form-row">
+          <input id="new-trainer-name" type="text" placeholder="Name (e.g. Aurora)" />
+          <input id="new-trainer-path" type="text" placeholder="/path/to/trainer.exe" />
+          <button id="browse-trainer">Browse…</button>
+          <button id="add-trainer" class="primary">Add</button>
+        </div>
+
+        <h2>Per-game trainers</h2>
+        <ul id="config-game-trainer-list" class="list"></ul>
+        <p id="no-game-trainers" class="note hidden">
+          None yet: open a game and use "Link a trainer file…".
+        </p>
+      </section>
+
       <div id="banner" class="banner hidden"></div>
     </main>
 

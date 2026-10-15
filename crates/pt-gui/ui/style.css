@@ -170,3 +170,61 @@ footer {
 .hidden {
   display: none;
 }
+
+.tabs {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tab {
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+  padding: 0.35rem 1rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.tab.active {
+  opacity: 1;
+  border-color: var(--teal);
+  background: var(--navy-light);
+}
+
+.card {
+  border: 1px solid var(--navy-light);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--teal);
+}
+
+.detail-head h2 {
+  margin-bottom: 0.1rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+input[type="text"] {
+  background: var(--navy-light);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  flex: 1;
+  min-width: 10rem;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--teal);
+}

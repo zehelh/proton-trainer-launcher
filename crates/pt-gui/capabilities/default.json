@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default capability: the window may call the app's own commands.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:default"]
 }

@@ -4,16 +4,36 @@ use serde::Serialize;
 
 use pt_core::WritePlan;
 
-/// One row of the game list: an installed game paired with the
-/// trainer definition that covers it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// Where a listed game comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GameStore {
+    /// A Steam game (native or Flatpak Steam).
+    Steam,
+    /// A Heroic Games Launcher game (Epic, GOG, or configured).
+    Heroic,
+}
+
+/// One row of the game list, from any store.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct GameRow {
-    /// Steam application id.
-    pub app_id: u32,
-    /// Game name as Steam reports it.
+    /// The store the game comes from.
+    pub store: GameStore,
+    /// Steam application id, or Heroic app name.
+    pub id: String,
+    /// Game name.
     pub name: String,
-    /// Id of the trainer definition covering this game.
-    pub trainer_id: String,
+    /// Id of the native TOML trainer definition covering this game,
+    /// when one exists (Steam only).
+    pub native_trainer: Option<String>,
+    /// Wine prefix: the Steam compatdata prefix, or the Heroic
+    /// per-game prefix.
+    pub wine_prefix: Option<String>,
+    /// Wine or Proton binary (Heroic per-game configuration).
+    pub wine_bin: Option<String>,
+    /// The `steamapps/` directory holding the game (Steam only), used
+    /// for Proton detection and prefix waiting.
+    pub steamapps: Option<String>,
 }
 
 /// A trainer entry as shown in the GUI entry list.

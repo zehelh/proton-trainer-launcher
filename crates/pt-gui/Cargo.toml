@@ -23,6 +23,7 @@ pt-discover.workspace = true
 pt-session.workspace = true
 pt-trainers.workspace = true
 serde.workspace = true
+tauri-plugin-dialog.workspace = true
 tauri.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

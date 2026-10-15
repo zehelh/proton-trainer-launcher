@@ -1,8 +1,15 @@
 # proton-trainer
 
-An open-source Linux game trainer for **single-player** games running under
-Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
-competitive games are out of scope, forever.
+An open-source Linux **trainer launcher**: it detects your installed
+games (Steam — every library disk, native and Flatpak — and Heroic) and
+launches them with the external trainer of your choice (Aurora, WeMod,
+xModHub, FLiNG, ...) running inside the game's own Proton/Wine prefix.
+It also ships a native TOML trainer engine (pattern scan, verified
+writes, freeze) for trainers authored for this app. Written in Rust.
+
+proton-trainer is a neutral gateway: it bundles and distributes no
+trainers and monetizes nothing. What you launch is your choice and
+your responsibility.
 
 > **Status: v0.1.1-dev — GUI rewrite.** The application now has a
 > graphical interface (Tauri 2). Steam discovery, the memory engine,
@@ -188,12 +195,26 @@ proton-trainer apply <trainer-id>             # dry-run: same plan, nothing writ
 proton-trainer apply <trainer-id> --apply     # write, verified, target resumed
 ```
 
-The GUI flow: game list → running-process check (denylist applied) →
-trainer entry list (checkboxes, `[freeze]` badges) → dry-run plan →
-apply results. Entries marked `[freeze]` are re-applied in the
-background while the session stays open. Attach is always refused with
-a plain-English explanation when the target matches the anti-cheat
-denylist, and blocked memory access reports the exact ptrace fix.
+The GUI has two tabs:
+
+- **Games** — every installed game from every store (Steam libraries
+  on all disks, native and Flatpak Steam, plus Heroic). Click a game
+  to: launch it plain, launch it with one of your **global trainers**
+  (Aurora, WeMod, xModHub, ...), launch it with a **per-game trainer**
+  you linked to it (e.g. a FLiNG trainer), or — when a native TOML
+  definition covers it — run the attach / dry-run plan / apply flow
+  (the denylist applies there, and blocked memory access reports the
+  exact ptrace fix).
+- **Configuration** — manage the global trainers (name + path, as
+  many as you like) and review the per-game links. Everything is
+  stored in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
+
+External trainers run inside the game's own Wine/Proton prefix with
+the game's own compatibility tool — the same trick as running them on
+Windows, no launch options to edit. Steam games launch through
+`steam://rungameid/<appid>`; Heroic games through the Heroic CLI; on a
+first run the app waits for Steam to create the game's prefix before
+starting the trainer (up to two minutes).
 
 The GUI is a Tauri 2 application; the system must provide
 `webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base

@@ -28,12 +28,14 @@
 
 pub mod cache;
 pub mod error;
+pub mod heroic;
 pub mod library;
 pub mod manifest;
 pub mod scan;
 pub mod vdf;
 
 pub use error::DiscoverError;
+pub use heroic::{scan_heroic, HeroicGame, HeroicStore};
 pub use library::{SteamFlavor, SteamRoot};
 pub use manifest::AppManifest;
 pub use scan::{scan, CompatData, Game, ScanOptions, ScanResult};

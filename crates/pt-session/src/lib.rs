@@ -22,14 +22,18 @@
 
 #![forbid(unsafe_code)]
 
+pub mod config;
 pub mod freeze;
+pub mod launch;
 pub mod session;
 pub mod types;
 
+pub use config::{AppConfig, GameTrainer, GlobalTrainer};
 pub use freeze::{freeze_tick, freeze_write, spawn_freeze, FreezeHandle};
+pub use launch::{launch_game, launch_with_trainer};
 pub use session::{
-    apply_plans, attach_outcome, attach_trainer, check_denylist, games_with_trainers,
-    load_trainers, plan_entries, AttachReport, AttachedSession, LiveSession,
+    all_games, apply_plans, attach_outcome, attach_trainer, check_denylist, load_trainers,
+    plan_entries, AttachReport, AttachedSession, LiveSession,
 };
 pub use types::{
     format_plan_row, hex, ApplyResult, AttachOutcome, EntryBrief, GameRow, PlanRow, PlanRowView,
