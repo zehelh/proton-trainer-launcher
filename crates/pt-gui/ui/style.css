@@ -222,6 +222,27 @@ footer {
   margin-bottom: 0.1rem;
 }
 
+.setting {
+  margin: 0 0 1rem 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.setting-row label {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.setting-row input[type="number"] {
+  width: 6rem;
+}
+
 .form-row {
   display: flex;
   gap: 0.5rem;

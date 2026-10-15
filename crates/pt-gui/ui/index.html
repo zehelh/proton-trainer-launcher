@@ -148,33 +148,47 @@
         </p>
 
         <h2>Settings</h2>
-        <div class="form-row">
-          <input
-            id="protonhax-wait"
-            type="number"
-            min="0"
-            step="1"
-            placeholder="10"
-            title="Protonhax environment wait (seconds)"
-          />
-          <input
-            id="game-wait"
-            type="number"
-            min="1"
-            step="1"
-            placeholder="90"
-            title="Game start wait (seconds)"
-          />
+
+        <div class="setting">
+          <div class="setting-row">
+            <label for="game-wait">Game start wait</label>
+            <input
+              id="game-wait"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="90"
+            />
+          </div>
+          <p class="note">
+            Seconds to wait for the launched game to actually start
+            before connecting the trainer (default 90). Raise it if
+            the trainer connects before the game is ready.
+          </p>
+        </div>
+
+        <div class="setting">
+          <div class="setting-row">
+            <label for="protonhax-wait">Protonhax wait</label>
+            <input
+              id="protonhax-wait"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="10"
+            />
+          </div>
+          <p class="note">
+            Steam only — seconds to wait for the game's protonhax
+            environment (requires <code>protonhax init %command%</code>
+            in the game's Steam launch options) before falling back
+            to a direct prefix run (default 10; 0 = check once).
+          </p>
+        </div>
+
+        <div class="actions">
           <button id="save-settings" class="primary">Save</button>
         </div>
-        <p class="note">
-          The two timeouts, in seconds. <strong>Game start wait</strong>
-          (default 90): how long to wait for a launched game to
-          actually start before the trainer connects. <strong>Protonhax
-          wait</strong> (default 10; 0 = a single check): how long a
-          Steam trainer launch waits for the game's protonhax
-          environment before falling back to a direct prefix run.
-        </p>
       </section>
 
       <div id="banner" class="banner hidden"></div>
