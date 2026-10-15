@@ -898,6 +898,7 @@ fn run_trainer(program: &Path, args: &[PathBuf], env: &TrainerEnv) -> Result<(),
         }
         TrainerEnv::Managed => {}
     }
+    sanitize_child_env(&mut command);
     attach_log_stdio(&mut command);
     tracing::info!(
         program = %program.display(),
@@ -953,20 +954,42 @@ fn find_client(binary: &str, flatpak_id: &str) -> (PathBuf, Vec<String>) {
     }
 }
 
-/// Launches a command detached; `prefix_args` precede the URL/args.
+/// Strips environment leaks that break SYSTEM child processes.
 ///
-/// `ELECTRON_RUN_AS_NODE` is stripped: it leaks from IDE terminals
-/// (VS Code exports it) and turns Electron-based clients such as
-/// Heroic into plain Node, where they crash with
-/// "Cannot find module 'electron'" instead of launching the game.
+/// AppImages leak their runtime environment into children:
+/// `PYTHONHOME`/`PYTHONPATH` point into the image mount and kill
+/// any Python child — GE-Proton's `proton` script dies with a fatal
+/// "Failed to import encodings module" (observed with the released
+/// AppImage); `LD_LIBRARY_PATH` injects the image's bundled libs
+/// into Wine/Steam; `GSETTINGS_SCHEMA_DIR` breaks GTK children.
+/// Everything this app spawns (store clients, Proton, Wine,
+/// protonhax, trainers) is a system process that must run with the
+/// system's own environment. `ELECTRON_RUN_AS_NODE` is the same
+/// class of leak (IDE terminals).
+fn sanitize_child_env(command: &mut std::process::Command) {
+    for var in [
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "LD_LIBRARY_PATH",
+        "GSETTINGS_SCHEMA_DIR",
+        "ELECTRON_RUN_AS_NODE",
+    ] {
+        command.env_remove(var);
+    }
+}
+
+/// Launches a command detached; `prefix_args` precede the URL/args.
+/// The child environment is sanitized (see [`sanitize_child_env`]).
 fn spawn_detached(command: &(PathBuf, Vec<String>), args: &[String]) -> Result<(), String> {
-    std::process::Command::new(&command.0)
+    let mut process = std::process::Command::new(&command.0);
+    process
         .args(&command.1)
         .args(args)
-        .env_remove("ELECTRON_RUN_AS_NODE")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    sanitize_child_env(&mut process);
+    process
         .spawn()
         .map(|_| ())
         .map_err(|source| format!("failed to launch with {}: {source}", command.0.display()))
@@ -981,8 +1004,8 @@ fn spawn_logged(client: &(PathBuf, Vec<String>), args: &[String]) -> Result<(), 
     command
         .args(&client.1)
         .args(args)
-        .env_remove("ELECTRON_RUN_AS_NODE")
         .stdin(std::process::Stdio::null());
+    sanitize_child_env(&mut command);
     attach_log_stdio(&mut command);
     tracing::info!(
         program = %client.0.display(),
@@ -1399,6 +1422,26 @@ mod tests {
             Some(Path::new("/home/x/.local/share/Steam"))
         );
         assert_eq!(steam_client_root(Path::new("/usr/bin/wine")), None);
+    }
+
+    #[test]
+    fn appimage_env_leaks_are_stripped_from_children() {
+        let mut command = std::process::Command::new("env");
+        command
+            .env("PYTHONHOME", "/leak")
+            .env("PYTHONPATH", "/leak")
+            .env("LD_LIBRARY_PATH", "/leak")
+            .env("ELECTRON_RUN_AS_NODE", "1");
+        sanitize_child_env(&mut command);
+        let output = command.output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(!stdout.contains("PYTHONHOME"), "env was: {stdout}");
+        assert!(!stdout.contains("PYTHONPATH"), "env was: {stdout}");
+        assert!(!stdout.contains("LD_LIBRARY_PATH"), "env was: {stdout}");
+        assert!(
+            !stdout.contains("ELECTRON_RUN_AS_NODE"),
+            "env was: {stdout}"
+        );
     }
 
     #[test]

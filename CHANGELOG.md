@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- AppImage: every spawned process (Proton, Wine, protonhax, store
+  clients, trainers) now runs with a sanitized environment. The
+  AppImage runtime leaks `PYTHONHOME`/`PYTHONPATH` (pointing into
+  the image mount) into children, which killed GE-Proton's Python
+  `proton` script with a fatal "Failed to import encodings module"
+  — no trainer ever started from the released 1.0.0 AppImage.
+  `LD_LIBRARY_PATH` (the image's bundled libs) and
+  `GSETTINGS_SCHEMA_DIR` are stripped alongside the existing
+  `ELECTRON_RUN_AS_NODE` handling.
+
 ## [1.0.0] - 2026-10-15
 
 ### Added

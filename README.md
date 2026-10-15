@@ -276,6 +276,11 @@ Two common environment pitfalls:
   updated `Proton-GE Latest`) cannot launch a trainer; proton-trainer
   reports the missing binary — re-select a version in Heroic's game
   settings (Wine tab).
+- AppImages leak their runtime environment (`PYTHONHOME`,
+  `PYTHONPATH`, `LD_LIBRARY_PATH`) into child processes; since the
+  Proton launcher is a Python script, that killed every trainer
+  spawned from the 1.0.0 AppImage. proton-trainer sanitizes the
+  environment of everything it spawns — fixed from 1.0.1.
 
 ## Logging
 
