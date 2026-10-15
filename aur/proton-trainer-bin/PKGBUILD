@@ -1,0 +1,32 @@
+# Maintainer: set your handle when publishing.
+pkgname=proton-trainer-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Memory trainer for single-player Steam games running under Proton (prebuilt binary)"
+arch=('x86_64')
+url="https://github.com/zehelh/proton-trainer-launcher"
+license=('MIT')
+depends=('gcc-libs')
+provides=('proton-trainer')
+conflicts=('proton-trainer')
+_release_url="https://github.com/zehelh/proton-trainer-launcher/releases/download"
+source=("${_release_url}/v${pkgver}/proton-trainer-${pkgver}-x86_64.tar.gz")
+# The sha256 is refreshed by the release process; it must match the
+# SHA256SUMS file attached to the release exactly.
+sha256sums=('SKIP')
+
+package() {
+    cd "${srcdir}/proton-trainer-${pkgver}-x86_64"
+
+    install -Dm755 proton-trainer "${pkgdir}/usr/bin/proton-trainer"
+
+    install -Dm644 LICENSE \
+        "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+    install -d "${pkgdir}/usr/share/proton-trainer/trainers"
+    install -Dm644 trainers/*.toml \
+        "${pkgdir}/usr/share/proton-trainer/trainers/"
+
+    install -Dm644 README.md \
+        "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

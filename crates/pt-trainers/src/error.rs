@@ -53,7 +53,7 @@ pub enum TrainerError {
 }
 
 impl TrainerError {
-    /// Builds a [`TrainerError::Schema`] with the given file and
+    /// Builds a [`Schema`](Self::Schema) error with the given file and
     /// message.
     pub fn schema(path: &std::path::Path, message: String) -> Self {
         Self::Schema {

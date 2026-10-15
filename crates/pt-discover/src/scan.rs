@@ -84,7 +84,7 @@ impl ScanOptions {
 ///
 /// Returns [`DiscoverError::Io`] when a directory cannot be listed or a
 /// readable file fails to load, and parse errors from
-/// [`parse_library_folders`](crate::library::parse_library_folders).
+/// [`parse_library_folders`].
 pub fn scan(options: &ScanOptions) -> Result<ScanResult, DiscoverError> {
     let mut seen_app_ids: HashSet<u32> = HashSet::new();
     let mut games = Vec::new();

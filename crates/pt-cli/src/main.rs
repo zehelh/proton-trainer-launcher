@@ -120,6 +120,16 @@ fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
             return Ok(dir);
         }
     }
+    // Install layouts (tarball, /usr/local, AppImage): the trainers
+    // directory ships next to the binary under ../share/.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(share) = exe.parent().and_then(|parent| parent.parent()) {
+            let dir = share.join("share").join("proton-trainer").join("trainers");
+            if dir.is_dir() {
+                return Ok(dir);
+            }
+        }
+    }
     let local = PathBuf::from("trainers");
     if local.is_dir() {
         return Ok(local);
@@ -127,7 +137,8 @@ fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
 
     Err(anyhow!(
         "no trainers directory found; pass --trainers-dir, create \
-         $XDG_CONFIG_HOME/proton-trainer/trainers, or ./trainers"
+         $XDG_CONFIG_HOME/proton-trainer/trainers, or run from a directory \
+         containing ./trainers"
     ))
 }
 

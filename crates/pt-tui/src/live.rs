@@ -353,8 +353,8 @@ impl Drop for FreezeHandle {
     }
 }
 
-/// Spawns the freeze loop: re-writes every freeze plan every
-/// [`FREEZE_INTERVAL`] until the handle is dropped.
+/// Spawns the freeze loop: re-writes every freeze plan every 33 ms
+/// until the handle is dropped.
 ///
 /// Each tick is a single write without SIGSTOP and without read-back
 /// verification (the value was verified when first applied); the plan

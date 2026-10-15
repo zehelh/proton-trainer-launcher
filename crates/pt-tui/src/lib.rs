@@ -1,7 +1,8 @@
 //! Terminal user interface for proton-trainer.
 //!
 //! The TUI is a pure library; the `proton-trainer` binary owns the
-//! process and calls [`run_terminal`] with an [`App`].
+//! process and calls [`run_terminal`](terminal::run_terminal) with an
+//! [`App`].
 //!
 //! Architecture:
 //!

@@ -4,9 +4,9 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha (milestone P4).** The workspace, CI, Steam
-> discovery, the memory engine, trainer definitions, and the TUI are in
-> place. Packaging lands with milestone P5. See the roadmap below.
+> **Status: pre-alpha (milestone P5).** All core features are in place
+> (Steam discovery, memory engine, trainer definitions, TUI, CLI).
+> v0.1.0 ships after hardening (milestone P6). See the roadmap below.
 
 ## Principles
 
@@ -44,6 +44,74 @@ just build
 just test
 just lint
 ```
+
+## Installation
+
+### CachyOS / Arch-based (AUR)
+
+```bash
+yay -S proton-trainer      # builds from source
+yay -S proton-trainer-bin  # prebuilt binary from the GitHub release
+```
+
+Both packages install the binary to `/usr/bin/proton-trainer` and the
+example trainer definitions to `/usr/share/proton-trainer/trainers/`.
+The `-bin` package tracks the GitHub releases; the sha256 is checked
+against the release's `SHA256SUMS`.
+
+### Bazzite (immutable, no layering)
+
+Use the AppImage or the release binary from the [releases
+page](https://github.com/zehelh/proton-trainer-launcher/releases) —
+nothing needs to be layered onto the system:
+
+```bash
+# AppImage: verify, make executable, run
+sha256sum -c SHA256SUMS
+chmod +x proton-trainer-*-x86_64.AppImage
+./proton-trainer-*-x86_64.AppImage tui
+```
+
+Put the AppImage in `~/.local/bin` (or anywhere on `PATH`). The
+binary variant also runs from `~/.local/bin`:
+
+```bash
+tar -xzf proton-trainer-*-x86_64.tar.gz
+cp proton-trainer-*-x86_64/proton-trainer ~/.local/bin/
+```
+
+The AppImage bundles everything except glibc; the release binary
+requires a 2024+ glibc (built on Ubuntu 24.04). On older systems,
+build from source.
+
+### ptrace requirements (read this)
+
+The trainer needs `process_vm_readv`/`process_vm_writev` access to
+the game process, which Yama restricts on most distros:
+
+```bash
+cat /proc/sys/kernel/yama/ptrace_scope   # 1 = parent-only (common default)
+```
+
+- **ptrace_scope = 0**: everything works as-is.
+- **ptrace_scope = 1** (common): the trainer must be privileged.
+  - Plain binary (AUR, tarball): grant it the capability once:
+    ```bash
+    sudo setcap cap_sys_ptrace=ep /usr/bin/proton-trainer
+    ```
+  - **AppImage**: `setcap` cannot apply to the binary inside the
+    image — set, in `/etc/sysctl.d/99-ptrace.conf` (persistent) or per
+    session:
+    ```bash
+    echo 'kernel.yama.ptrace_scope = 0' | sudo tee /etc/sysctl.d/99-ptrace.conf
+    sudo sysctl --system
+    ```
+
+proton-trainer detects the situation and prints these exact fixes on
+`EPERM` — including the Flatpak/pressure-vessel explanation when Yama
+is not the blocker (Steam on Bazzite may run games inside a sandbox;
+if tracing is blocked with `ptrace_scope = 0`, run the trainer from
+the same environment).
 
 ## Usage
 

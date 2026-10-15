@@ -1,0 +1,14 @@
+pkgbase = proton-trainer-bin
+	pkgdesc = Memory trainer for single-player Steam games running under Proton (prebuilt binary)
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/zehelh/proton-trainer-launcher
+	arch = x86_64
+	license = MIT
+	depends = gcc-libs
+	provides = proton-trainer
+	conflicts = proton-trainer
+	source = https://github.com/zehelh/proton-trainer-launcher/releases/download/v0.1.0/proton-trainer-0.1.0-x86_64.tar.gz
+	sha256sums = SKIP
+
+pkgname = proton-trainer-bin

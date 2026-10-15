@@ -55,9 +55,7 @@ pub fn parse_hex_bytes(text: &str) -> Result<Vec<u8>, String> {
 ///
 /// # Errors
 ///
-/// Returns an error naming the offending token (see
-/// [`parse_pattern`]) or a [`TrainerError::Schema`] wrapped by the
-/// caller through its message.
+/// Returns an error naming the offending token (see [`parse_pattern`]).
 pub fn to_core_pattern(text: &str) -> Result<Pattern, String> {
     let (bytes, mask) = parse_pattern(text)?;
     Pattern::new(bytes, mask).map_err(|error| error.to_string())

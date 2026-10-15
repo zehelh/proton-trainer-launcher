@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Release packaging: GitHub Actions release workflow (tag-triggered)
+  building the x86_64 binary tarball and the AppImage (linuxdeploy),
+  with SHA256SUMS; every release is built by CI, never locally.
+- CI now also builds the AppImage on every push and smoke-runs it
+  without FUSE (`APPIMAGE_EXTRACT_AND_RUN`), then runs it inside the
+  Arch container in a clean `$HOME` sandbox.
+- AUR packaging: `aur/proton-trainer` (source build) and
+  `aur/proton-trainer-bin` (prebuilt) PKGBUILDs plus publishing
+  instructions; both install the example trainers to
+  `/usr/share/proton-trainer/trainers/`.
+- Trainer definitions now also resolve from install layouts
+  (`<binary>/../share/proton-trainer/trainers`), which makes the
+  tarball, AUR, and AppImage installs work out of the box.
+- `deny.toml` for `cargo deny check` (license and advisory gates).
+- Installation documentation for CachyOS (AUR) and Bazzite (AppImage),
+  including the full ptrace requirements section (setcap for plain
+  binaries, sysctl for the AppImage, Flatpak sandbox notes).
+
+### Changed
+
+- The `ptrace_scope = 1` advice now explains that the AppImage cannot
+  use `setcap` (its runtime forks) and that `sysctl
+  kernel.yama.ptrace_scope = 0` is required there.
+
 - `pt-tui`: ratatui interface — game list, running-process check,
   trainer entry list, and apply/dry-run views, keyboard-driven and
   readable at any terminal size. The state machine is pure and

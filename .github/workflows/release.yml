@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build and publish (ubuntu-latest, x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Gate (clippy + tests)
+        run: |
+          cargo clippy --all-targets --all-features --workspace -- -D warnings
+          cargo test --all-features --workspace
+
+      - name: Build release binary
+        run: cargo build --release --workspace
+
+      - name: Package binary tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STAGE="proton-trainer-${VERSION}-x86_64"
+          mkdir -p "dist/${STAGE}/trainers"
+          cp target/release/proton-trainer "dist/${STAGE}/"
+          cp LICENSE README.md "dist/${STAGE}/"
+          cp trainers/*.toml "dist/${STAGE}/trainers/"
+          tar -czf "dist/${STAGE}.tar.gz" -C dist "${STAGE}"
+
+      - name: Build AppImage
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          packaging/appimage/build.sh "${VERSION}"
+          mv "build/proton-trainer-${VERSION}-x86_64.AppImage" dist/
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum ./*.AppImage ./*.tar.gz > SHA256SUMS
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.AppImage
+            dist/*.tar.gz
+            dist/SHA256SUMS

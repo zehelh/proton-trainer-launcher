@@ -104,9 +104,11 @@ pub fn ptrace_advice(scope: Option<u32>) -> String {
              Run the trainer from the same environment, or as the same user \
              outside the sandbox, and try again."
             .to_string(),
-        Some(1) => "Yama ptrace_scope is 1 (parent-only tracing). Either relax it for \
-             this session: sudo sysctl kernel.yama.ptrace_scope=0, or grant the \
-             binary the capability once: sudo setcap cap_sys_ptrace=ep \
+        Some(1) => "Yama ptrace_scope is 1 (parent-only tracing), so only an \
+             ancestor of the game can attach. Either relax it for this \
+             session: sudo sysctl kernel.yama.ptrace_scope=0 (required when \
+             running the AppImage), or, when running the plain binary, grant \
+             it the capability once: sudo setcap cap_sys_ptrace=ep \
              <path-to>/proton-trainer"
             .to_string(),
         Some(_) => "Yama ptrace_scope restricts tracing to admin-approved processes \
@@ -152,6 +154,8 @@ mod tests {
         let advice = ptrace_advice(Some(1));
         assert!(advice.contains("setcap cap_sys_ptrace=ep"));
         assert!(advice.contains("ptrace_scope=0"));
+        // AppImage users cannot use setcap; the advice must say so.
+        assert!(advice.contains("AppImage"));
     }
 
     #[test]

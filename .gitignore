@@ -9,6 +9,9 @@
 /target/
 Cargo.lock.orig
 
+# Packaging build output (AppImage staging)
+/build/
+
 # Logs
 *.log
 

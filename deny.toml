@@ -1,0 +1,31 @@
+# cargo-deny configuration.
+#
+# `cargo deny check` is part of the release gate; it is not installed
+# on every dev machine, so it runs locally/on the release checklist
+# rather than in CI.
+[licenses]
+version = 2
+# Everything in the tree must be MIT, Apache-2.0, or
+# Apache-2.0-with-exceptions style (unlicense/isc for small ones).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+]
+
+[advisories]
+version = 2
+
+[bans]
+# Duplicated versions are noisy but allowed; deny does not run on every
+# PR, so keep this check permissive and review at release time.
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
