@@ -1,0 +1,37 @@
+# Anti-cheat denylist for proton-trainer.
+#
+# proton-trainer is for SINGLE-PLAYER games only. Attach is refused
+# whenever the target's executable name or any mapped file path
+# contains one of these patterns (case-insensitive). This is a
+# refusal list: there is no bypass, ever.
+schema_version = 1
+
+[[component]]
+name = "EasyAntiCheat"
+kind = "anticheat"
+match = ["easyanticheat", "eac_launcher", "eac_ecosystem"]
+
+[[component]]
+name = "BattlEye"
+kind = "anticheat"
+match = ["battleye", "bedaisy"]
+
+[[component]]
+name = "Riot Vanguard"
+kind = "anticheat"
+match = ["vgc.exe", "vgtray", "vgk.sys", "vanguard"]
+
+[[component]]
+name = "EQU8"
+kind = "anticheat"
+match = ["equ8"]
+
+[[component]]
+name = "Wellbia XIGNCODE3"
+kind = "anticheat"
+match = ["xigncode"]
+
+[[component]]
+name = "nProtect GameGuard"
+kind = "anticheat"
+match = ["gameguard"]

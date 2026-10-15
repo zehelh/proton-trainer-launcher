@@ -4,10 +4,10 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha (milestone P2).** The workspace structure, CI,
-> Steam discovery, and the memory engine are in place. Trainer
-> definitions and the TUI land with milestones P3-P4. See the roadmap
-> below.
+> **Status: pre-alpha (milestone P3).** The workspace structure, CI,
+> Steam discovery, the memory engine, and trainer definitions are in
+> place. The TUI and the attach/apply commands land with milestone P4.
+> See the roadmap below.
 
 ## Principles
 
@@ -70,7 +70,44 @@ colon-separated list:
 PROTON_TRAINER_STEAM_ROOTS=/tmp/fake-steam proton-trainer list
 ```
 
-### Planned (milestones P3-P4)
+### Trainer definitions (milestone P3)
+
+Trainers are TOML files in a `trainers/` directory. Each entry scans
+for a byte pattern (hex, `??` = wildcard) and writes a typed value at
+a fixed offset from the match:
+
+```toml
+schema_version = 1
+id = "hollow-knight"
+name = "Hollow Knight"
+steam_app_id = 367520
+exe_names = ["hollow_knight.exe"]
+version = "0.1.0"
+
+[[entry]]
+id = "soul"
+label = "Infinite SOUL"
+search = { pattern = "89 45 ?? 8B 06" }
+offset = 12
+value = { type = "i32", data = 99 }
+freeze = true
+```
+
+Values support `i32`, `i64`, `f32`, `f64`, and raw `bytes` (hex).
+Definitions are validated strictly: unknown keys, duplicate ids, and
+malformed patterns are rejected with clear errors. The examples in
+[`trainers/`](trainers/) include a fully working one for the test
+dummy target; the others use placeholder patterns by design.
+
+### Anti-cheat policy
+
+The binary ships with an anti-cheat denylist (EasyAntiCheat, BattlEye,
+Vanguard, EQU8, XIGNCODE3, nProtect GameGuard). If the target's
+executable or any of its mapped files match, attach is **refused**
+with a plain-English explanation. There is no bypass and there never
+will be: proton-trainer targets single-player games only.
+
+### Planned (milestone P4)
 
 ```text
 proton-trainer attach <game> --dry-run               # show the write plan

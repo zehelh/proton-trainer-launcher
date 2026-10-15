@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pt-trainers`: TOML trainer definitions (game metadata, executable
+  names, entries with a hex search pattern supporting `??` wildcards,
+  a value offset, typed values `i32`/`i64`/`f32`/`f64`/`bytes`, and a
+  freeze option) with strict validation: unknown keys rejected, clear
+  English errors naming the file and the offending entry, unique ids
+  enforced within and across files.
+- Anti-cheat denylist (`pt-trainers/denylist.toml`, compiled into the
+  binary): attach is refused when the target's exe name or any mapped
+  file path matches a known component (EasyAntiCheat, BattlEye,
+  Vanguard, EQU8, XIGNCODE3, nProtect GameGuard). Refusal, never
+  bypass, with a plain-English explanation.
+- Example trainers shipped in `trainers/`: a fully working one for the
+  integration-test dummy target and two schema examples with
+  placeholder patterns.
+- Property tests (proptest): pattern parse roundtrips, value byte
+  encodings, entry offset math against the engine's region validation,
+  and no-panic parsing of arbitrary input.
 - `pt-core` memory engine: process discovery by exe name (`/proc`
   scan), `/proc/<pid>/maps` parsing with fixture-based tests,
   `process_vm_readv`/`process_vm_writev` with partial-transfer

@@ -1,0 +1,27 @@
+# SCHEMA EXAMPLE — the search pattern below is a placeholder. It will
+# never match the real game, so this trainer performs no writes. Find
+# real patterns by scanning the game's memory, then fill them in and
+# verify with `proton-trainer attach <game> --dry-run` before applying.
+schema_version = 1
+id = "hollow-knight"
+name = "Hollow Knight"
+steam_app_id = 367520
+exe_names = ["hollow_knight.exe"]
+version = "0.1.0"
+description = "Single-player schema example with placeholder patterns."
+
+[[entry]]
+id = "soul"
+label = "Infinite SOUL"
+search = { pattern = "89 45 ?? 8B 06 A1" }
+offset = 12
+value = { type = "i32", data = 99 }
+freeze = true
+
+[[entry]]
+id = "geo"
+label = "999999 Geo"
+search = { pattern = "8B 41 1C 89 45 ?? D9 45" }
+offset = 6
+value = { type = "i32", data = 999999 }
+freeze = false
