@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI: adding a global trainer or linking a trainer to a game now
+  refreshes the list immediately (void commands resolved to `null`,
+  which the frontend mistook for failure).
+- Launch with trainer: Proton is now looked up in the **primary**
+  Steam installation (compatibility tools and `config.vdf` never live
+  in secondary libraries), fixing trainer launches for games installed
+  on other disks; official Protons in the game's own library are also
+  found; `STEAM_COMPAT_DATA_PATH` is set alongside `WINEPREFIX`.
+
 ### Added
+
+- File logging: app events and trainer output are appended to
+  `~/.local/state/proton-trainer/proton-trainer.log` (stderr output is
+  kept for terminal launches); launch steps (game, prefix, Proton,
+  trainer command line and pid) are logged so failures are
+  diagnosable after the fact.
 
 - Trainer launcher mode: a Configuration tab manages any number of
   **global trainers** (Aurora, WeMod, xModHub, ...) and per-game

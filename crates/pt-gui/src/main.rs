@@ -81,10 +81,37 @@ fn main() -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into())
         });
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(filter)
-        .init();
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    // Two sinks: stderr (for terminal launches) and the log file
+    // (everything, so problems are diagnosable after the fact — the
+    // trainer's own output is redirected there too).
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr));
+    match pt_session::logging::log_file() {
+        Ok(log) => {
+            let directory = log
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .to_string_lossy()
+                .to_string();
+            let file_name = log
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let appender = tracing_appender::rolling::never(directory, file_name);
+            registry
+                .with(tracing_subscriber::fmt::layer().with_writer(appender))
+                .init();
+        }
+        Err(error) => {
+            registry.init();
+            tracing::warn!(%error, "file logging unavailable");
+        }
+    }
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),

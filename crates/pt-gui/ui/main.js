@@ -82,6 +82,30 @@ async function call(name, args, busyLabel) {
   }
 }
 
+// For commands returning nothing (save_config, launch, ...): their
+// success resolves to null, which collides with call()'s error
+// sentinel. This wrapper returns true on success, false on error (the
+// error banner is shown by call()).
+async function callVoid(name, args, busyLabel) {
+  let failed = false;
+  setStatus(busyLabel);
+  for (const button of document.querySelectorAll("button")) {
+    button.disabled = true;
+  }
+  try {
+    await invoke(name, args);
+  } catch (error) {
+    failed = true;
+    banner("error", String(error));
+  } finally {
+    for (const button of document.querySelectorAll("button")) {
+      button.disabled = false;
+    }
+    setStatus("idle");
+  }
+  return !failed;
+}
+
 // ---------------------------------------------------------------- games
 
 function renderGames() {
@@ -173,26 +197,24 @@ function renderDetailTrainers() {
 }
 
 async function launchPlain() {
-  const result = await call(
-    "launch",
-    { row: state.detail },
-    "launching the game…",
-  );
-  if (result !== null) {
+  if (
+    await callVoid("launch", { row: state.detail }, "launching the game…")
+  ) {
     banner("info", "Game launched.");
   }
 }
 
 async function launchTrainer(trainerPath) {
-  const result = await call(
-    "launch_trainer",
-    { row: state.detail, trainerPath },
-    "launching the game with the trainer (the prefix may take a while on first run)…",
-  );
-  if (result !== null) {
+  if (
+    await callVoid(
+      "launch_trainer",
+      { row: state.detail, trainerPath },
+      "launching the game with the trainer (the prefix may take a while on first run)…",
+    )
+  ) {
     banner(
       "info",
-      "Game launched; the trainer is running in the game's prefix.",
+      "Game launched; the trainer is running in the game's prefix. Details in the log file.",
     );
   }
 }
@@ -214,12 +236,7 @@ async function linkTrainer() {
     name,
     path,
   });
-  const saved = await call(
-    "save_config",
-    { config: state.config },
-    "saving the configuration…",
-  );
-  if (saved !== null) {
+  if (await callVoid("save_config", { config: state.config }, "saving the configuration…")) {
     renderDetailTrainers();
     banner("info", `Linked ${name} to this game.`);
   }
@@ -370,7 +387,7 @@ async function apply() {
 }
 
 async function stopSession() {
-  await call("stop_session", {}, "releasing the attach…");
+  await callVoid("stop_session", {}, "releasing the attach…");
   state.attached = null;
   state.entries = [];
   state.plans = [];
@@ -392,7 +409,7 @@ function renderConfig() {
       state.config.trainers = state.config.trainers.filter(
         (t) => t.id !== trainer.id,
       );
-      await call(
+      await callVoid(
         "save_config",
         { config: state.config },
         "saving the configuration…",
@@ -422,7 +439,7 @@ function renderConfig() {
       state.config.game_trainer = state.config.game_trainer.filter(
         (l) => l !== link,
       );
-      await call(
+      await callVoid(
         "save_config",
         { config: state.config },
         "saving the configuration…",
@@ -457,12 +474,7 @@ async function addTrainer() {
     suffix += 1;
   }
   state.config.trainers.push({ id, name, path });
-  const saved = await call(
-    "save_config",
-    { config: state.config },
-    "saving the configuration…",
-  );
-  if (saved !== null) {
+  if (await callVoid("save_config", { config: state.config }, "saving the configuration…")) {
     document.getElementById("new-trainer-name").value = "";
     document.getElementById("new-trainer-path").value = "";
     renderConfig();

@@ -220,6 +220,14 @@ The GUI is a Tauri 2 application; the system must provide
 `webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base
 image).
 
+### Troubleshooting
+
+Everything — app events, launch steps, and the output of the trainers
+themselves — is appended to
+`~/.local/state/proton-trainer/proton-trainer.log`. When a game or a
+trainer fails to start, that file says why (selected Proton, prefix,
+command line, and the trainer's own stderr).
+
 ## Logging
 
 The binary logs with `tracing`. Set `RUST_LOG` or pass `--log-filter`:

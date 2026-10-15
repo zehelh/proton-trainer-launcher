@@ -46,25 +46,27 @@ pub fn trainer_run_args(wine_bin: &Path, trainer: &Path) -> (PathBuf, Vec<PathBu
     }
 }
 
-/// Finds the Proton binary for a Steam game: the tool mapped to the
-/// game in `config.vdf` (`CompatToolMapping`), else the newest custom
-/// tool in `compatibilitytools.d`, else any official Proton in
-/// `steamapps/common`.
+/// Finds the Proton binary for a Steam game. `steam_root` is the
+/// primary Steam installation root (custom tools and `config.vdf`
+/// live there, never in secondary libraries); `game_steamapps` is the
+/// `steamapps/` directory of the library the game is installed in
+/// (official Protons can also be installed there).
 ///
-/// `steamapps` is the game's `steamapps/` directory; the Steam root is
-/// its parent.
-pub fn find_proton(steamapps: &Path, app_id: u32) -> Option<PathBuf> {
-    let steam_root = steamapps.parent()?;
-
+/// Order: the tool mapped to the game in `config.vdf`
+/// (`CompatToolMapping`), else the newest custom tool in the primary
+/// root's `compatibilitytools.d`, else any official Proton in either
+/// `steamapps/common`.
+pub fn find_proton(steam_root: &Path, game_steamapps: &Path, app_id: u32) -> Option<PathBuf> {
     // 1. The tool mapped to this game in config.vdf.
     let mapped = compat_tool_name(&steam_root.join("config").join("config.vdf"), app_id);
     if let Some(tool) = mapped {
-        if let Some(proton) = proton_for_tool(steam_root, &tool) {
+        if let Some(proton) = proton_for_tool(steam_root, game_steamapps, &tool) {
             return Some(proton);
         }
     }
 
-    // 2. The newest custom tool (GE-Proton and friends).
+    // 2. The newest custom tool (GE-Proton and friends) in the
+    //    primary root.
     let custom = steam_root.join("compatibilitytools.d");
     if let Ok(entries) = std::fs::read_dir(&custom) {
         let mut tools: Vec<PathBuf> = entries
@@ -78,25 +80,34 @@ pub fn find_proton(steamapps: &Path, app_id: u32) -> Option<PathBuf> {
         }
     }
 
-    // 3. Any official Proton in steamapps/common.
-    let common = steamapps.join("common");
-    if let Ok(entries) = std::fs::read_dir(&common) {
-        let mut tools: Vec<PathBuf> = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .map(|name| name.to_ascii_lowercase().starts_with("proton"))
-                    .unwrap_or(false)
-            })
-            .collect();
-        tools.sort();
-        if let Some(latest) = tools.pop() {
-            return proton_candidate(&latest);
+    // 3. Any official Proton, in the primary root's or the game
+    //    library's steamapps/common.
+    for common in [
+        steam_root.join("steamapps").join("common"),
+        game_steamapps.join("common"),
+    ] {
+        if let Some(proton) = newest_official_proton(&common) {
+            return Some(proton);
         }
     }
     None
+}
+
+/// The newest `Proton*` tool directory in one `steamapps/common`.
+fn newest_official_proton(common: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(common).ok()?;
+    let mut tools: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.to_ascii_lowercase().starts_with("proton"))
+                .unwrap_or(false)
+        })
+        .collect();
+    tools.sort();
+    tools.pop().and_then(|latest| proton_candidate(&latest))
 }
 
 /// The `proton` binary of one compatibility tool directory, checking
@@ -111,9 +122,10 @@ fn proton_candidate(tool_dir: &Path) -> Option<PathBuf> {
 }
 
 /// Resolves a compatibility tool name to its proton binary.
-fn proton_for_tool(steam_root: &Path, tool: &str) -> Option<PathBuf> {
+fn proton_for_tool(steam_root: &Path, game_steamapps: &Path, tool: &str) -> Option<PathBuf> {
     proton_candidate(&steam_root.join("compatibilitytools.d").join(tool))
         .or_else(|| proton_candidate(&steam_root.join("steamapps").join("common").join(tool)))
+        .or_else(|| proton_candidate(&game_steamapps.join("common").join(tool)))
 }
 
 /// Reads the compat tool name mapped to one app from `config.vdf`.
@@ -144,10 +156,12 @@ pub fn launch_game(game: &GameRow) -> Result<(), String> {
                 .id
                 .parse()
                 .map_err(|_| format!("invalid Steam app id {:?}", game.id))?;
+            tracing::info!(app_id, game = %game.name, "launching via steam");
             let url = steam_launch_args(app_id);
             spawn_detached(&find_client("steam", "com.valvesoftware.Steam"), &url)
         }
         GameStore::Heroic => {
+            tracing::info!(app = %game.id, game = %game.name, "launching via heroic");
             let args = heroic_launch_args(&game.id);
             spawn_detached(&find_client("heroic", "com.heroicgameslauncher.hgl"), &args)
         }
@@ -175,7 +189,7 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
 
     match game.store {
         GameStore::Steam => {
-            let steamapps = game
+            let game_steamapps = game
                 .steamapps
                 .as_ref()
                 .map(PathBuf::from)
@@ -184,14 +198,26 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 .id
                 .parse()
                 .map_err(|_| format!("invalid Steam app id {:?}", game.id))?;
-            let prefix = wait_for_steam_prefix(&steamapps, app_id)?;
-            let proton = find_proton(&steamapps, app_id).ok_or_else(|| {
-                "no Proton found: install GE-Proton in compatibilitytools.d \
-                 or a Proton in steamapps/common"
-                    .to_string()
+            // The primary Steam installation: custom compatibility
+            // tools and config.vdf live there even when the game is
+            // installed in a secondary library on another disk.
+            let steam_root = primary_steam_root()?;
+            let prefix = wait_for_steam_prefix(&game_steamapps, app_id)?;
+            tracing::info!(prefix = %prefix.display(), "game prefix located");
+            let proton = find_proton(&steam_root, &game_steamapps, app_id).ok_or_else(|| {
+                format!(
+                    "no Proton found: install GE-Proton in \
+                         {}/compatibilitytools.d or a Proton in steamapps/common",
+                    steam_root.display()
+                )
             })?;
+            tracing::info!(proton = %proton.display(), "proton located");
+            let compat_data = prefix
+                .parent()
+                .map(|parent| parent.to_path_buf())
+                .unwrap_or_else(|| prefix.clone());
             let (program, args) = trainer_run_args(&proton, trainer);
-            run_trainer(&program, &args, &prefix)
+            run_trainer(&program, &args, &prefix, Some(&compat_data))
         }
         GameStore::Heroic => {
             let prefix = game
@@ -204,10 +230,25 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 .as_ref()
                 .map(PathBuf::from)
                 .ok_or("this Heroic game has no configured Wine/Proton binary")?;
+            tracing::info!(
+                wine = %wine_bin.display(),
+                prefix = %prefix.display(),
+                "heroic wine configuration located"
+            );
             let (program, args) = trainer_run_args(&wine_bin, trainer);
-            run_trainer(&program, &args, &prefix)
+            run_trainer(&program, &args, &prefix, None)
         }
     }
+}
+
+/// The primary Steam installation root (where compatibility tools and
+/// `config.vdf` live).
+fn primary_steam_root() -> Result<PathBuf, String> {
+    let roots = pt_discover::library::default_steam_roots().map_err(|error| error.to_string())?;
+    roots
+        .first()
+        .map(|root| root.path.clone())
+        .ok_or_else(|| "no Steam installation found".to_string())
 }
 
 /// Waits for `<steamapps>/compatdata/<appid>/pfx` to exist (first
@@ -234,16 +275,51 @@ fn wait_for_steam_prefix(steamapps: &Path, app_id: u32) -> Result<PathBuf, Strin
     }
 }
 
-/// Runs the trainer inside a prefix, detached from this process.
-fn run_trainer(program: &Path, args: &[PathBuf], prefix: &Path) -> Result<(), String> {
-    std::process::Command::new(program)
+/// Runs the trainer inside a prefix, detached from this process. The
+/// trainer's stdout and stderr are appended to the application log so
+/// launch failures are diagnosable after the fact.
+fn run_trainer(
+    program: &Path,
+    args: &[PathBuf],
+    prefix: &Path,
+    steam_compat_data: Option<&Path>,
+) -> Result<(), String> {
+    let mut command = std::process::Command::new(program);
+    command
         .env("WINEPREFIX", prefix)
         .args(args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stdin(std::process::Stdio::null());
+    if let Some(compat_data) = steam_compat_data {
+        command.env("STEAM_COMPAT_DATA_PATH", compat_data);
+    }
+    let mut logged = false;
+    if let Ok(log) = crate::logging::log_file() {
+        let stdout = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&log);
+        let stderr = std::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&log);
+        if let (Ok(stdout), Ok(stderr)) = (stdout, stderr) {
+            command.stdout(std::process::Stdio::from(stdout));
+            command.stderr(std::process::Stdio::from(stderr));
+            logged = true;
+        }
+    }
+    if !logged {
+        command.stdout(std::process::Stdio::null());
+        command.stderr(std::process::Stdio::null());
+    }
+    tracing::info!(
+        program = %program.display(),
+        args = ?args,
+        "spawning the trainer"
+    );
+    command
         .spawn()
-        .map(|_| ())
+        .map(|child| tracing::info!(pid = child.id(), "trainer started"))
         .map_err(|source| {
             format!(
                 "failed to run the trainer with {}: {source}",
@@ -348,9 +424,15 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(find_proton(&steamapps, 42), Some(tool.join("proton")));
+        assert_eq!(
+            find_proton(steam_root, &steamapps, 42),
+            Some(tool.join("proton"))
+        );
         // Unmapped game falls back to the custom tool.
-        assert_eq!(find_proton(&steamapps, 43), Some(tool.join("proton")));
+        assert_eq!(
+            find_proton(steam_root, &steamapps, 43),
+            Some(tool.join("proton"))
+        );
     }
 
     #[test]
@@ -361,13 +443,52 @@ mod tests {
         let tool = steam_root.join("compatibilitytools.d/UMU-Proton/files");
         std::fs::create_dir_all(&tool).unwrap();
         std::fs::write(tool.join("proton"), "#!/bin/sh\n").unwrap();
-        assert_eq!(find_proton(&steamapps, 7), Some(tool.join("proton")));
+        assert_eq!(
+            find_proton(steam_root, &steamapps, 7),
+            Some(tool.join("proton"))
+        );
     }
 
     #[test]
     fn find_proton_returns_none_without_tools() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(find_proton(&dir.path().join("steamapps"), 7), None);
+        assert_eq!(
+            find_proton(dir.path(), &dir.path().join("steamapps"), 7),
+            None
+        );
+    }
+
+    #[test]
+    fn find_proton_uses_primary_root_for_secondary_library_games() {
+        // The game lives in a secondary library with no compatibility
+        // tools; the primary root has one.
+        let dir = tempfile::tempdir().unwrap();
+        let steam_root = dir.path().join("steam-root");
+        let game_steamapps = dir.path().join("MP600/SteamLibrary/steamapps");
+        let tool = steam_root.join("compatibilitytools.d/GE-Proton10-34");
+        std::fs::create_dir_all(&tool).unwrap();
+        std::fs::write(tool.join("proton"), "#!/bin/sh\n").unwrap();
+
+        assert_eq!(
+            find_proton(&steam_root, &game_steamapps, 99),
+            Some(tool.join("proton"))
+        );
+    }
+
+    #[test]
+    fn find_proton_finds_official_proton_in_the_game_library() {
+        // No custom tools anywhere; the game's library ships a Proton.
+        let dir = tempfile::tempdir().unwrap();
+        let steam_root = dir.path().join("steam-root");
+        let game_steamapps = dir.path().join("MP600/SteamLibrary/steamapps");
+        let proton = game_steamapps.join("common/Proton - Experimental");
+        std::fs::create_dir_all(&proton).unwrap();
+        std::fs::write(proton.join("proton"), "#!/bin/sh\n").unwrap();
+
+        assert_eq!(
+            find_proton(&steam_root, &game_steamapps, 7),
+            Some(proton.join("proton"))
+        );
     }
 
     #[test]

@@ -25,6 +25,7 @@
 pub mod config;
 pub mod freeze;
 pub mod launch;
+pub mod logging;
 pub mod session;
 pub mod types;
 
