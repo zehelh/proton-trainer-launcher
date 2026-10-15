@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pt-discover`: VDF parser, Steam root discovery (native
+  `~/.local/share/Steam`, `~/.steam/steam`, `~/.steam/root`, and Flatpak
+  `~/.var/app/com.valvesoftware.Steam`), `libraryfolders.vdf` and
+  `appmanifest_*.acf` parsing with checked-in realistic fixtures,
+  compatdata prefix detection, and a scan-result cache in
+  `$XDG_CONFIG_HOME/proton-trainer/scan-cache.toml`.
+- `proton-trainer list` subcommand printing installed Steam games, with
+  `--cached` to print the previous scan without rescanning.
+- `PROTON_TRAINER_STEAM_ROOTS` environment variable to override Steam
+  root discovery (testing on machines without Steam).
 - Cargo workspace with five crates: `pt-core`, `pt-discover`, `pt-trainers`,
   `pt-tui`, and the `proton-trainer` binary (`pt-cli`).
 - Strict workspace lints (warnings denied, clippy `all` denied).

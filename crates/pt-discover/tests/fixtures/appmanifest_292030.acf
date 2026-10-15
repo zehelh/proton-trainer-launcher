@@ -1,0 +1,18 @@
+"AppState"
+{
+	"appid"		"292030"
+	"universe"		"1"
+	"name"		"The Witcher 3: Wild Hunt"
+	"StateFlags"		"2"
+	"installdir"		"The Witcher 3"
+	"LastUpdated"		"1739974138"
+	"SizeOnDisk"		"53687091200"
+	"buildid"		"16732401"
+	"InstalledDepots"
+	{
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

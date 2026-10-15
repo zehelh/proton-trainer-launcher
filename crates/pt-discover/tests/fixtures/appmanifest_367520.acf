@@ -1,0 +1,28 @@
+"AppState"
+{
+	"appid"		"367520"
+	"universe"		"1"
+	"name"		"Hollow Knight"
+	"StateFlags"		"4"
+	"installdir"		"Hollow Knight"
+	"LastUpdated"		"1746229138"
+	"LastPlayed"		"1759221488"
+	"SizeOnDisk"		"919415977"
+	"buildid"		"18638867"
+	"InstalledDepots"
+	{
+		"367521"
+		{
+			"manifest"		"1234567890123456789"
+			"size"		"919415977"
+		}
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

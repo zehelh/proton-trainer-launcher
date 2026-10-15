@@ -1,0 +1,24 @@
+"AppState"
+{
+	"appid"		"105600"
+	"universe"		"1"
+	"name"		"Terraria"
+	"StateFlags"		"4"
+	"installdir"		"Terraria"
+	"LastUpdated"		"1790974138"
+	"LastPlayed"		"1791051488"
+	"SizeOnDisk"		"831365954"
+	"buildid"		"24893155"
+	"InstalledDepots"
+	{
+		"105602"
+		{
+			"manifest"		"4206021387845829879"
+			"size"		"831365954"
+		}
+	}
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+}

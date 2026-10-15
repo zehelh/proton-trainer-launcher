@@ -4,9 +4,9 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha scaffold (milestone P0).** The workspace structure, CI,
-> and CLI skeleton are in place. Steam discovery, the memory engine, trainer
-> definitions, and the TUI land with milestones P1-P4. See the roadmap below.
+> **Status: pre-alpha (milestone P1).** The workspace structure, CI, and
+> Steam discovery are in place. The memory engine, trainer definitions,
+> and the TUI land with milestones P2-P4. See the roadmap below.
 
 ## Principles
 
@@ -47,12 +47,33 @@ just lint
 
 ## Usage
 
-Not yet functional beyond `--version` (pre-alpha). The planned CLI:
+### List installed Steam games
+
+```bash
+proton-trainer list          # scan Steam libraries, print games, update the cache
+proton-trainer list --cached # print the previous scan without rescanning
+```
+
+Output columns: app id, name, prefix (`proton` when a compatdata prefix
+exists, `none` for native Linux games), and the `steamapps/` directory
+holding the game. The scan result is cached in
+`$XDG_CONFIG_HOME/proton-trainer/scan-cache.toml`.
+
+Steam roots are auto-detected (native `~/.local/share/Steam`,
+`~/.steam/steam`, `~/.steam/root`, and Flatpak
+`~/.var/app/com.valvesoftware.Steam`). To scan other directories —
+e.g. on a machine without Steam — set `PROTON_TRAINER_STEAM_ROOTS` to a
+colon-separated list:
+
+```bash
+PROTON_TRAINER_STEAM_ROOTS=/tmp/fake-steam proton-trainer list
+```
+
+### Planned (milestones P2-P4)
 
 ```text
-proton-trainer list                                  # installed Steam games
 proton-trainer attach <game> --dry-run               # show the write plan
-proton-trainer apply <game> --apply                 # apply trainer values
+proton-trainer apply <game> --apply                  # apply trainer values
 ```
 
 ## Logging
