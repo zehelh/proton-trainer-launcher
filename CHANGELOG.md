@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pt-core` memory engine: process discovery by exe name (`/proc`
+  scan), `/proc/<pid>/maps` parsing with fixture-based tests,
+  `process_vm_readv`/`process_vm_writev` with partial-transfer
+  handling, mapped-region validation before every write, read-back
+  verification, and SIGSTOP/SIGCONT orchestration that resumes the
+  target on every error path (RAII guard, including panics).
+- Byte-pattern scanning (`Pattern` with per-byte wildcards) over the
+  target's private writable regions.
+- Dry-run semantics: `plan_write` builds a validated `WritePlan`
+  (pid, address, old/new bytes, region) without writing; `apply`
+  executes it after re-validating the region with a fresh maps read.
+- Actionable ptrace errors: `EPERM` is reported in plain English with
+  the exact fix (`setcap cap_sys_ptrace=ep` or
+  `sysctl kernel.yama.ptrace_scope=0`), tailored to the detected
+  Yama ptrace scope; verified end-to-end on a `ptrace_scope=1` system.
+- Dummy target process (`pt-dummy-target` test binary) and
+  integration tests covering discovery, scan, read, dry-run, verified
+  apply, stop/restore guarantees, and refusals (unmapped, read-only,
+  region-crossing, empty writes, dead processes).
 - `pt-discover`: VDF parser, Steam root discovery (native
   `~/.local/share/Steam`, `~/.steam/steam`, `~/.steam/root`, and Flatpak
   `~/.var/app/com.valvesoftware.Steam`), `libraryfolders.vdf` and

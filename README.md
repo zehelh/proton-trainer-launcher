@@ -4,9 +4,10 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha (milestone P1).** The workspace structure, CI, and
-> Steam discovery are in place. The memory engine, trainer definitions,
-> and the TUI land with milestones P2-P4. See the roadmap below.
+> **Status: pre-alpha (milestone P2).** The workspace structure, CI,
+> Steam discovery, and the memory engine are in place. Trainer
+> definitions and the TUI land with milestones P3-P4. See the roadmap
+> below.
 
 ## Principles
 
@@ -69,12 +70,18 @@ colon-separated list:
 PROTON_TRAINER_STEAM_ROOTS=/tmp/fake-steam proton-trainer list
 ```
 
-### Planned (milestones P2-P4)
+### Planned (milestones P3-P4)
 
 ```text
 proton-trainer attach <game> --dry-run               # show the write plan
 proton-trainer apply <game> --apply                  # apply trainer values
 ```
+
+The memory engine backing those commands is complete (`pt-core`):
+every write is validated against one mapped writable region, applied
+while the target is briefly stopped, read back and verified, and the
+target is always resumed — even on errors. See the crate docs
+(`cargo doc --open -p pt-core`).
 
 ## Logging
 

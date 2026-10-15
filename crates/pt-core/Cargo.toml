@@ -6,10 +6,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+# Integration tests are declared explicitly below so the dummy target
+# binary under tests/ is not also picked up as a test target.
+autotests = false
 
 [lints]
 workspace = true
 
 [dependencies]
+libc.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+# Dummy target used by the integration tests. Built automatically with
+# `cargo test` and located via the CARGO_BIN_EXE_pt-dummy-target env.
+[[bin]]
+name = "pt-dummy-target"
+path = "tests/dummy/main.rs"
+
+[[test]]
+name = "dummy_target"
+path = "tests/dummy_target.rs"
