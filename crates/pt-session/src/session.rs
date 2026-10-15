@@ -130,8 +130,26 @@ const IGNORED_STEAM_APP_IDS: &[u32] = &[
     1628350, // Proton EasyAntiCheat Runtime
     1161040, // Proton BattlEye Runtime
     1826350, // Steam Linux Runtime 3.0 (sniper)
+    1826330, // Proton EasyAntiCheat Runtime (older id)
     961879,  // Proton 6.3 runtime
 ];
+
+/// Name prefixes that mark runtimes and tools rather than games.
+const IGNORED_NAME_PREFIXES: &[&str] = &[
+    "Proton ",             // "Proton 10.0", "Proton Hotfix", ...
+    "Steam Linux Runtime", // sniper/soldier/scout variants
+    "Steamworks Common Redist",
+];
+
+/// Returns `true` when a Steam entry is a runtime, not a game.
+fn is_steam_runtime(app_id: u32, name: &str) -> bool {
+    if IGNORED_STEAM_APP_IDS.contains(&app_id) {
+        return true;
+    }
+    IGNORED_NAME_PREFIXES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+}
 
 /// Lists every installed game from every store (Steam libraries —
 /// including secondary disks — and Heroic), with per-game launch data.
@@ -148,7 +166,7 @@ pub fn all_games(trainers_dir: &Path) -> Result<Vec<GameRow>, String> {
     let mut rows: Vec<GameRow> = result
         .games
         .iter()
-        .filter(|game| !IGNORED_STEAM_APP_IDS.contains(&game.app_id))
+        .filter(|game| !is_steam_runtime(game.app_id, &game.name))
         .map(|game| GameRow {
             store: GameStore::Steam,
             id: game.app_id.to_string(),
@@ -402,5 +420,23 @@ impl LiveSession {
         self.stop_freeze();
         self.state = None;
         self.plans.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_entries_are_filtered_by_id_and_name() {
+        assert!(is_steam_runtime(
+            228980,
+            "Steamworks Common Redistributables"
+        ));
+        assert!(is_steam_runtime(123, "Proton 10.0"));
+        assert!(is_steam_runtime(123, "Proton Hotfix"));
+        assert!(is_steam_runtime(123, "Steam Linux Runtime 3.0 (sniper)"));
+        assert!(!is_steam_runtime(367520, "Hollow Knight"));
+        assert!(!is_steam_runtime(2246340, "Monster Hunter Wilds"));
     }
 }
