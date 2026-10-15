@@ -1,117 +1,88 @@
-# Proton Trainer Launcher
+# proton-trainer
 
-Launch Windows game trainers (Aurora, WeMod, Plitch, etc.) for Steam games running under Proton on Linux.
+An open-source Linux game trainer for **single-player** games running under
+Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
+competitive games are out of scope, forever.
 
-## Features
+> **Status: pre-alpha scaffold (milestone P0).** The workspace structure, CI,
+> and CLI skeleton are in place. Steam discovery, the memory engine, trainer
+> definitions, and the TUI land with milestones P1-P4. See the roadmap below.
 
-- Auto-detects running Steam games
-- Matches Proton version used by the game
-- Supports multiple Proton variants (GE-Proton, Proton Experimental, CachyOS Proton)
-- Interactive and manual modes
-- Compatible with Aurora, WeMod, Plitch, and other Windows trainers
+## Principles
 
-## Requirements
+- Single-player games only. Processes matching known anti-cheat components
+  (EAC, BattlEye, Vanguard, ...) are **refused**, never bypassed.
+- Every write is validated against the target's mapped regions, applied
+  while the target is briefly stopped, read back and verified, and the
+  target is always resumed — even on error.
+- `--dry-run` everywhere: plans are shown before anything is written.
+  Writes require an explicit `--apply`.
+- Boring, well-documented code, tested end to end with a dummy target
+  process (no test ever touches a real game).
 
-- Linux with Steam
-- Proton or GE-Proton
-- Windows trainer executable (Aurora, WeMod, Plitch, etc.)
+## Compatibility targets (priority order)
 
-## Compatibility
+1. **CachyOS** (Arch-based, x86_64) — primary dev/test machine.
+2. **Bazzite** (immutable, Steam often Flatpak) — works from `~/.local/bin`
+   or as an AppImage, without layering packages.
+3. Generic x86_64 Linux — best effort.
 
-**Tested:**
-- Aurora (Cheat Happens)
+## Building from source
 
-**Should work (untested):**
-- WeMod
-- Plitch
-- FLiNG Trainers
-- Any Windows trainer that attaches to game processes
+Requires Rust stable (see `rust-version` in `Cargo.toml` for the MSRV).
 
-## Installation
+```bash
+cargo build --release
+./target/release/proton-trainer --version
+```
 
-1. Clone or download this repository
-2. Edit the `TRAINER_PATH` variable in the script to point to your trainer executable
-3. Make the script executable:
-   ```bash
-   chmod +x launch-trainer.sh
-   # or for fish
-   chmod +x launch-trainer.fish
-   ```
+Or with [just](https://github.com/casey/just) (optional; every recipe maps
+to a raw cargo command inside the `justfile`):
+
+```bash
+just build
+just test
+just lint
+```
 
 ## Usage
 
-### Auto-detect running game (recommended)
-```bash
-./launch-trainer.sh
+Not yet functional beyond `--version` (pre-alpha). The planned CLI:
+
+```text
+proton-trainer list                                  # installed Steam games
+proton-trainer attach <game> --dry-run               # show the write plan
+proton-trainer apply <game> --apply                 # apply trainer values
 ```
 
-### Specify game by App ID
-```bash
-./launch-trainer.sh 241930  # Shadow of Mordor
-```
+## Logging
 
-### With delay (if game takes time to load)
-```bash
-./launch-trainer.sh --delay 10 241930
-```
-
-### List running games
-```bash
-./launch-trainer.sh --list
-```
-
-## Configuration
-
-Edit these variables at the top of the script:
+The binary logs with `tracing`. Set `RUST_LOG` or pass `--log-filter`:
 
 ```bash
-TRAINER_PATH="/path/to/your/trainer.exe"  # Aurora.exe, WeMod.exe, Plitch.exe, etc.
-STEAM_APPS="$HOME/.local/share/Steam/steamapps"
+RUST_LOG=proton_trainer=debug proton-trainer list
+proton-trainer --log-filter=debug list
 ```
 
-## Troubleshooting
+## ptrace notes
 
-### Game crashes when activating trainer options
+Memory access uses `process_vm_readv`/`process_vm_writev`, which are subject
+to Yama ptrace restrictions:
 
-1. **Use GE-Proton** instead of regular Proton (more permissive with memory modifications)
-   - Download from [GE-Proton Releases](https://github.com/GloriousEggroll/proton-ge-custom/releases)
-   - Extract to `~/.local/share/Steam/compatibilitytools.d/`
-   - Set in Steam: Game Properties → Compatibility → Force GE-Proton
+- `kernel.yama.ptrace_scope = 0`: works for all same-user processes.
+- `kernel.yama.ptrace_scope = 1` (default on many distros): parent-only —
+  the trainer must be granted access, e.g. with
+  `sudo setcap cap_sys_ptrace=ep proton-trainer` or by setting
+  `sudo sysctl kernel.yama.ptrace_scope=0`.
 
-2. **Disable ESYNC/FSYNC** in Steam launch options:
-   ```
-   PROTON_NO_ESYNC=1 PROTON_NO_FSYNC=1 %command%
-   ```
+The tool **detects** the situation and prints the exact fix instead of
+failing with a cryptic `EPERM` (implemented in milestone P2).
 
-3. **Run game in windowed mode** (in-game graphics settings)
+## Development
 
-4. **Disable Steam overlay** in game properties
-
-### Trainer doesn't attach to game
-
-- Ensure the game is fully loaded before launching the trainer
-- Try adding a delay: `./launch-trainer.sh --delay 10 <APP_ID>`
-
-### Wine version mismatch error
-
-Kill all Wine processes and retry:
-```bash
-wineserver -k
-pkill wineserver
-```
-
-## Finding Game App IDs
-
-- Check your Steam library URL: `steam://nav/games/details/<APP_ID>`
-- Use SteamDB: https://steamdb.info/
-- Run the script with `--list` while game is running
-
-## Known Limitations
-
-- Only works with games running under Proton
-- Native Linux games are not supported
-- Some anti-cheat protected games may not work
+See [CONTRIBUTING.md](CONTRIBUTING.md). The v1 shell/fish launcher scripts
+that inspired this project are archived under [archive/v1/](archive/v1/).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).

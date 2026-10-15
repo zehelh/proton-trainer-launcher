@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pt-cli",
+    "crates/pt-core",
+    "crates/pt-discover",
+    "crates/pt-trainers",
+    "crates/pt-tui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# MSRV policy: current stable minus two minor versions.
+rust-version = "1.97"
+license = "MIT"
+repository = "https://github.com/zehelh/proton-trainer-launcher"
+homepage = "https://github.com/zehelh/proton-trainer-launcher"
+readme = "README.md"
+
+[workspace.lints.rust]
+warnings = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+
+pt-core = { path = "crates/pt-core", version = "0.1.0" }
+pt-discover = { path = "crates/pt-discover", version = "0.1.0" }
+pt-trainers = { path = "crates/pt-trainers", version = "0.1.0" }
+pt-tui = { path = "crates/pt-tui", version = "0.1.0" }
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  ubuntu:
+    name: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: Test
+        run: cargo test --all-features --workspace
+
+  arch:
+    name: Arch Linux container
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base
+    steps:
+      - name: Install toolchain
+        run: pacman -Sy --noconfirm --needed git nodejs rust
+      - uses: actions/checkout@v4
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: Test
+        run: cargo test --all-features --workspace

@@ -1,0 +1,25 @@
+[package]
+name = "pt-cli"
+description = "The proton-trainer command-line binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "proton-trainer"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+pt-core.workspace = true
+pt-discover.workspace = true
+pt-trainers.workspace = true
+pt-tui.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

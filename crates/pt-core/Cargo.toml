@@ -1,0 +1,15 @@
+[package]
+name = "pt-core"
+description = "Process discovery and memory read/write engine for proton-trainer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+tracing.workspace = true
