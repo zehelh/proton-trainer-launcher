@@ -2602,7 +2602,7 @@ dependencies = [
 
 [[package]]
 name = "pt-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "libc",
  "proptest",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "pt-discover"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "dirs 6.0.0",
  "proptest",
@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "pt-gui"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -2646,7 +2646,7 @@ dependencies = [
 
 [[package]]
 name = "pt-session"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "dirs 6.0.0",
  "pt-core",
@@ -2660,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "pt-trainers"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "proptest",
  "pt-core",
