@@ -231,7 +231,16 @@ game's container. This needs two things:
 
 When protonhax cannot be used, the app falls back to running the
 trainer directly in the prefix — that only works for games NOT running
-in a container — and shows a warning. Heroic games are unaffected.
+in a container — and shows a warning.
+
+**Heroic (umu) note.** Heroic runs Proton games through
+[umu](https://github.com/Open-Wine-Components/umu-launcher), also
+inside a pressure-vessel container. proton-trainer runs Heroic
+trainers through `umu-run` in their own container with the game's
+environment (`WINEPREFIX`/`PROTONPATH`) — the topology the umu
+community uses for WeMod and friends; a trainer spawned directly on
+the host fights the game's wineserver and blocks the game. umu-run
+is required (bundled with Heroic).
 
 The GUI is a Tauri 2 application; the system must provide
 `webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base

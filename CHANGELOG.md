@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic Proton trainers now run through `umu-run`, in their own
+  umu/pressure-vessel container with the game's environment
+  (`UMU_ID`/`WINEPREFIX`/`PROTONPATH`) — the same topology as the
+  game itself. Verified live: the game and a umu-run trainer
+  coexist, while a trainer spawned next to the game (host-side
+  Proton, even after waiting for the game's wineserver socket)
+  deadlocked the game until the trainer was closed. Falls back to
+  the direct prefix run with a warning when umu-run is missing;
+  plain-Wine Heroic games keep the WINEPREFIX flow.
 - Heroic trainers no longer block the game: the game is now started
   first and waited for (up to 90 s, detecting its umu/wine process
   by prefix or install path) before the trainer connects. Heroic
