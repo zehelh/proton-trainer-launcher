@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic games configured with Proton now get the full Steam compat
+  environment for the trainer (`STEAM_COMPAT_DATA_PATH` — Heroic's
+  `winePrefix` is a compatdata directory, Proton derives the Wine
+  prefix as `<dir>/pfx` — plus client path and app id). Proton
+  ignores `WINEPREFIX` and exited with "No compat data path?" before,
+  so the trainer never started; plain-Wine Heroic games keep
+  `WINEPREFIX`.
 - Heroic launches: the store client is now spawned with
   `ELECTRON_RUN_AS_NODE` stripped (leaking from IDE terminals, it
   made the Heroic CLI crash with "Cannot find module 'electron'")

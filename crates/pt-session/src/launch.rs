@@ -31,12 +31,7 @@ pub fn heroic_launch_args(app_name: &str) -> Vec<String> {
 /// The command that runs a trainer inside a prefix: Proton takes
 /// `run <exe>`, plain wine takes the exe directly.
 pub fn trainer_run_args(wine_bin: &Path, trainer: &Path) -> (PathBuf, Vec<PathBuf>) {
-    let is_proton = wine_bin
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name == "proton")
-        .unwrap_or(false);
-    if is_proton {
+    if is_proton(wine_bin) {
         (
             wine_bin.to_path_buf(),
             vec!["run".into(), trainer.to_path_buf()],
@@ -353,7 +348,7 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                     // protonhax sources WINEPREFIX and the whole
                     // Proton environment from the env dir the game
                     // exported; setting our own would fight it.
-                    run_trainer(&program, &args, None, None)?;
+                    run_trainer(&program, &args, &TrainerEnv::Managed)?;
                     return Ok(String::new());
                 }
                 tracing::warn!(
@@ -373,13 +368,16 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                 .parent()
                 .map(|parent| parent.to_path_buf())
                 .unwrap_or_else(|| prefix.clone());
-            let steam_env = SteamTrainerEnv {
-                compat_data,
-                steam_root: steam_root.clone(),
-                app_id,
-            };
             let (program, args) = trainer_run_args(&proton, trainer);
-            run_trainer(&program, &args, Some(&prefix), Some(&steam_env))?;
+            run_trainer(
+                &program,
+                &args,
+                &TrainerEnv::Proton {
+                    compat_data,
+                    steam_root: steam_root.clone(),
+                    app_id,
+                },
+            )?;
             Ok(protonhax_hint(&steam_root, app_id))
         }
         GameStore::Heroic => {
@@ -399,7 +397,24 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                 "heroic wine configuration located"
             );
             let (program, args) = trainer_run_args(&wine_bin, trainer);
-            run_trainer(&program, &args, Some(&prefix), None)?;
+            let env = if is_proton(&wine_bin) {
+                // Heroic's `winePrefix` for a Proton game is a
+                // compatdata directory — the Wine prefix is
+                // `<dir>/pfx`, created by Proton — so the trainer
+                // needs the full Steam compat environment, exactly
+                // like a Steam game.
+                let steam_root = steam_client_root(&wine_bin)
+                    .or_else(|| primary_steam_root().ok())
+                    .ok_or("could not determine the Steam client path for this Proton")?;
+                TrainerEnv::Proton {
+                    compat_data: prefix,
+                    steam_root,
+                    app_id: 0,
+                }
+            } else {
+                TrainerEnv::Wine { prefix }
+            };
+            run_trainer(&program, &args, &env)?;
             Ok(String::new())
         }
     }
@@ -631,43 +646,82 @@ fn wait_for_steam_prefix(steamapps: &Path, app_id: u32) -> Result<PathBuf, Strin
     }
 }
 
-/// The Steam environment a trainer needs in the game's prefix.
+/// The Wine/Proton environment a trainer is spawned into.
 #[derive(Debug, Clone)]
-pub struct SteamTrainerEnv {
-    /// `STEAM_COMPAT_DATA_PATH`: the game's compatdata directory.
-    pub compat_data: PathBuf,
-    /// `STEAM_COMPAT_CLIENT_INSTALL_PATH`: the primary Steam root.
-    pub steam_root: PathBuf,
-    /// `STEAM_COMPAT_APP_ID`: the game's app id.
-    pub app_id: u32,
+pub enum TrainerEnv {
+    /// Plain Wine: `WINEPREFIX` points at the prefix directory.
+    Wine {
+        /// The Wine prefix directory.
+        prefix: PathBuf,
+    },
+    /// Proton (Steam or Heroic): Proton ignores `WINEPREFIX` and
+    /// EXITS with "No compat data path?" unless
+    /// `STEAM_COMPAT_DATA_PATH` is set — it derives the Wine prefix
+    /// as `<compat_data>/pfx`. The client path and app id complete
+    /// the environment Steam normally provides (Proton reads the
+    /// client path when writing prefix configuration).
+    Proton {
+        /// `STEAM_COMPAT_DATA_PATH`: the compatdata directory.
+        compat_data: PathBuf,
+        /// `STEAM_COMPAT_CLIENT_INSTALL_PATH`: the Steam root.
+        steam_root: PathBuf,
+        /// `STEAM_COMPAT_APP_ID`: the game's app id (0 when none).
+        app_id: u32,
+    },
+    /// protonhax: the runner sources its own environment from the
+    /// env dir the game exported; nothing must be overridden.
+    Managed,
+}
+
+/// Returns `true` when `wine_bin` is a Proton launcher (it takes
+/// `run <exe>` and requires the Steam compat environment).
+fn is_proton(wine_bin: &Path) -> bool {
+    wine_bin
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name == "proton")
+        .unwrap_or(false)
+}
+
+/// The Steam client root a Proton tool belongs to:
+/// `<root>/compatibilitytools.d/<tool>/proton` → `<root>`.
+/// Used for `STEAM_COMPAT_CLIENT_INSTALL_PATH`.
+fn steam_client_root(proton: &Path) -> Option<PathBuf> {
+    let compat_dir = proton.parent()?.parent()?;
+    if compat_dir.file_name().and_then(|name| name.to_str()) == Some("compatibilitytools.d") {
+        compat_dir.parent().map(Path::to_path_buf)
+    } else {
+        None
+    }
 }
 
 /// Runs the trainer detached from this process. The trainer's stdout
 /// and stderr are appended to the application log so launch failures
-/// are diagnosable after the fact. `prefix` sets `WINEPREFIX` unless
-/// the runner manages its own environment (protonhax does — passing
-/// `None` there).
-fn run_trainer(
-    program: &Path,
-    args: &[PathBuf],
-    prefix: Option<&Path>,
-    steam_env: Option<&SteamTrainerEnv>,
-) -> Result<(), String> {
+/// are diagnosable after the fact.
+fn run_trainer(program: &Path, args: &[PathBuf], env: &TrainerEnv) -> Result<(), String> {
     let mut command = std::process::Command::new(program);
     command.args(args).stdin(std::process::Stdio::null());
-    if let Some(prefix) = prefix {
-        command.env("WINEPREFIX", prefix);
-    }
-    if let Some(env) = steam_env {
-        command
-            .env("STEAM_COMPAT_DATA_PATH", &env.compat_data)
-            .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", &env.steam_root)
-            .env("STEAM_COMPAT_APP_ID", env.app_id.to_string());
+    match env {
+        TrainerEnv::Wine { prefix } => {
+            command.env("WINEPREFIX", prefix);
+        }
+        TrainerEnv::Proton {
+            compat_data,
+            steam_root,
+            app_id,
+        } => {
+            command
+                .env("STEAM_COMPAT_DATA_PATH", compat_data)
+                .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", steam_root)
+                .env("STEAM_COMPAT_APP_ID", app_id.to_string());
+        }
+        TrainerEnv::Managed => {}
     }
     attach_log_stdio(&mut command);
     tracing::info!(
         program = %program.display(),
         args = ?args,
+        env = ?env,
         "spawning the trainer"
     );
     command
@@ -1146,5 +1200,16 @@ mod tests {
         assert!(validate_heroic_wine(&game)
             .unwrap_err()
             .contains("no configured"));
+    }
+
+    #[test]
+    fn steam_client_root_is_derived_from_the_tool_layout() {
+        let proton =
+            Path::new("/home/x/.local/share/Steam/compatibilitytools.d/GE-Proton11-7/proton");
+        assert_eq!(
+            steam_client_root(proton).as_deref(),
+            Some(Path::new("/home/x/.local/share/Steam"))
+        );
+        assert_eq!(steam_client_root(Path::new("/usr/bin/wine")), None);
     }
 }
