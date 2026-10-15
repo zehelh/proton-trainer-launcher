@@ -25,9 +25,14 @@ allow = [
 version = 2
 ignore = [
     # paste is unmaintained (RUSTSEC-2024-0436) but is a build-time
-    # proc-macro pulled in by ratatui 0.29; no vulnerability is known.
-    # Revisit when ratatui drops it.
+    # proc-macro pulled in by ratatui 0.29 (TUI, since removed); kept
+    # for a few releases in case of regressions. No vulnerability is
+    # known.
     "RUSTSEC-2024-0436",
+    # proc-macro-error is unmaintained (RUSTSEC-2024-0363); transitive
+    # via the gtk-rs stack pulled in by Tauri. No vulnerability is
+    # known; revisit when the glib/tauri tree drops it.
+    "RUSTSEC-2024-0370",
 ]
 
 [bans]

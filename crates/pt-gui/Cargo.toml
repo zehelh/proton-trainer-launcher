@@ -1,6 +1,6 @@
 [package]
-name = "pt-cli"
-description = "The proton-trainer command-line binary"
+name = "pt-gui"
+description = "The proton-trainer application: GTK/WebKit GUI plus headless CLI subcommands"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -16,11 +16,16 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-dirs.workspace = true
 clap.workspace = true
+dirs.workspace = true
 pt-core.workspace = true
 pt-discover.workspace = true
+pt-session.workspace = true
 pt-trainers.workspace = true
-pt-tui.workspace = true
+serde.workspace = true
+tauri.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true

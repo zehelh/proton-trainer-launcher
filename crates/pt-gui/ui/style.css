@@ -1,0 +1,172 @@
+:root {
+  --navy: #181e2c;
+  --navy-light: #232b3f;
+  --teal: #2dd4bf;
+  --text: #eef2ff;
+  --muted: #94a3b8;
+  --danger: #f87171;
+  --ok: #34d399;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  padding: 0.8rem 1.2rem 0.6rem;
+  border-bottom: 3px solid var(--teal);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+main {
+  flex: 1;
+  padding: 1rem 1.2rem;
+  overflow-y: auto;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.8rem;
+}
+
+.screen {
+  max-width: 48rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.list li {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--navy-light);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.list li:hover {
+  background: var(--navy-light);
+}
+
+.list li small {
+  color: var(--muted);
+}
+
+.list li .badge {
+  font-size: 0.7rem;
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+}
+
+.list li .status-ok {
+  color: var(--ok);
+}
+
+.list li .status-fail {
+  color: var(--danger);
+}
+
+pre {
+  background: var(--navy-light);
+  border: 1px solid var(--navy-light);
+  border-radius: 6px;
+  padding: 0.8rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+button {
+  background: var(--navy-light);
+  color: var(--text);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+button:hover {
+  border-color: var(--teal);
+}
+
+button.primary {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #06251f;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0.4rem 0;
+}
+
+.banner {
+  margin-top: 1rem;
+  padding: 0.7rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.banner.error {
+  background: #3b1219;
+  border: 1px solid var(--danger);
+  color: #fecaca;
+}
+
+.banner.info {
+  background: #10202b;
+  border: 1px solid var(--teal);
+  color: var(--text);
+}
+
+footer {
+  padding: 0.4rem 1.2rem;
+  border-top: 1px solid var(--navy-light);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.hidden {
+  display: none;
+}

@@ -1,119 +1,18 @@
-//! The `proton-trainer` command-line binary.
-//!
-//! Running the binary without a subcommand launches the interactive
-//! TUI. Subcommands:
-//!
-//! - `list` — installed Steam games (milestone P1)
-//! - `attach <trainer-id>` — dry-run plan, read-only (P4)
-//! - `apply <trainer-id> --dry-run|--apply` — dry-run by default,
-//!   writes only with `--apply` (P4)
-//! - `tui` — the interactive terminal interface (P4)
+//! Headless CLI subcommands, sharing the same session workflow as the
+//! GUI.
 
 use anyhow::{anyhow, Context};
-use clap::{Parser, Subcommand};
-use pt_discover::cache;
-use pt_discover::scan::{scan, ScanOptions, ScanResult};
-use pt_trainers::Denylist;
-use pt_tui::app::App;
-use pt_tui::backend::PlanRow;
-use pt_tui::live::{attach_trainer, plan_entries, LiveBackend};
-use pt_tui::terminal::run_terminal;
 use std::path::PathBuf;
 
-/// Memory trainer for single-player Steam games running under Proton/Wine.
-///
-/// Single-player only. Anti-cheat protected games are refused, never bypassed.
-#[derive(Debug, Parser)]
-#[command(
-    name = "proton-trainer",
-    version = env!("CARGO_PKG_VERSION"),
-    about
-)]
-struct Cli {
-    /// Log filter override (defaults to RUST_LOG, then "info").
-    #[arg(long, global = true)]
-    log_filter: Option<String>,
-
-    /// Trainer definitions directory.
-    ///
-    /// Defaults to $XDG_CONFIG_HOME/proton-trainer/trainers when it
-    /// exists, then ./trainers.
-    #[arg(long, global = true)]
-    trainers_dir: Option<PathBuf>,
-
-    /// Without a subcommand, the interactive TUI launches.
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Debug, Subcommand)]
-enum Commands {
-    /// List installed Steam games and their Proton compatdata prefixes.
-    List {
-        /// Print the cached scan result instead of scanning again.
-        #[arg(long)]
-        cached: bool,
-    },
-    /// Attach to a trainer's game and print the write plan. Read-only:
-    /// never writes, never stops the target.
-    Attach {
-        /// Trainer definition id, e.g. `hollow-knight`.
-        trainer_id: String,
-        /// Accepted for explicitness; `attach` is always a dry run and
-        /// never writes, with or without this flag.
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Apply a trainer's entries. Dry-run by default; writes only with
-    /// --apply.
-    Apply {
-        /// Trainer definition id, e.g. `hollow-knight`.
-        trainer_id: String,
-        /// Perform the writes (without this flag nothing is written).
-        #[arg(long)]
-        apply: bool,
-    },
-    /// Launch the interactive terminal interface.
-    Tui,
-}
-
-fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
-    let filter = cli
-        .log_filter
-        .as_deref()
-        .map(tracing_subscriber::EnvFilter::try_new)
-        .transpose()?
-        .unwrap_or_else(|| {
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive(tracing::Level::INFO.into())
-        });
-
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(filter)
-        .init();
-
-    tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
-        "proton-trainer starting"
-    );
-
-    match cli.command {
-        None => cmd_tui(cli.trainers_dir),
-        Some(Commands::List { cached }) => cmd_list(cached),
-        Some(Commands::Attach { trainer_id, .. }) => cmd_attach(&trainer_id, cli.trainers_dir),
-        Some(Commands::Apply { trainer_id, apply }) => {
-            cmd_apply(&trainer_id, cli.trainers_dir, apply)
-        }
-        Some(Commands::Tui) => cmd_tui(cli.trainers_dir),
-    }
-}
+use pt_discover::cache;
+use pt_discover::scan::{scan, ScanOptions, ScanResult};
+use pt_session::session::{attach_trainer, plan_entries, AttachReport};
+use pt_session::types::{format_plan_row, PlanRow};
+use pt_trainers::Denylist;
 
 /// Resolves the trainers directory: explicit flag, then the XDG config
-/// directory, then `./trainers`.
-fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
+/// directory, then install layouts, then `./trainers`.
+pub fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
     if let Some(dir) = flag {
         if dir.is_dir() {
             return Ok(dir.clone());
@@ -127,8 +26,8 @@ fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
             return Ok(dir);
         }
     }
-    // Install layouts (tarball, /usr/local, AppImage): the trainers
-    // directory ships next to the binary under ../share/.
+    // Install layouts (tarball, /usr/local): the trainers directory
+    // ships next to the binary under ../share/.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(share) = exe.parent().and_then(|parent| parent.parent()) {
             let dir = share.join("share").join("proton-trainer").join("trainers");
@@ -150,7 +49,7 @@ fn resolve_trainers_dir(flag: Option<&PathBuf>) -> anyhow::Result<PathBuf> {
 }
 
 /// Implementation of `proton-trainer list`.
-fn cmd_list(cached: bool) -> anyhow::Result<()> {
+pub fn cmd_list(cached: bool) -> anyhow::Result<()> {
     let result = if cached {
         cache::load()
             .context("failed to read the scan cache")?
@@ -241,34 +140,32 @@ fn find_trainer(
 fn print_plans(plans: &[PlanRow]) {
     println!();
     for row in plans {
-        println!("{}", pt_tui::format_plan_row(row));
+        println!("{}", format_plan_row(row));
     }
 }
 
 /// Implementation of `proton-trainer attach` (read-only dry-run plan).
-fn cmd_attach(trainer_id: &str, trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
+pub fn cmd_attach(trainer_id: &str, trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
     let trainer = find_trainer(trainers_dir.as_ref(), trainer_id)?;
     let denylist = Denylist::embedded().context("the embedded anti-cheat denylist is invalid")?;
-    let report =
-        attach_trainer(&trainer, &denylist).map_err(|error| anyhow!("attach failed: {error}"))?;
-    match &report {
-        pt_tui::live::AttachReport::Running(session) => {
+    match attach_trainer(&trainer, &denylist).map_err(|e| anyhow!("attach failed: {e}"))? {
+        AttachReport::Running(session) => {
             println!(
                 "Attached to {} (pid {})",
                 session.target.exe_name, session.target.pid
             );
             println!("Trainer: {} v{}", trainer.id, trainer.version);
             let ids: Vec<String> = trainer.entries.iter().map(|e| e.id.clone()).collect();
-            let plans = plan_entries(session, &ids)
+            let plans = plan_entries(&session, &ids)
                 .map_err(|error| anyhow!("building the write plan failed: {error}"))?;
             println!("Dry-run plan (nothing has been written):");
             print_plans(&plans);
             Ok(())
         }
-        pt_tui::live::AttachReport::NotRunning(exe_names) => Err(anyhow!(
+        AttachReport::NotRunning(exe_names) => Err(anyhow!(
             "no running process found for {exe_names:?}; launch the game first"
         )),
-        pt_tui::live::AttachReport::Refused(explanation) => {
+        AttachReport::Refused(explanation) => {
             eprintln!("REFUSED: {explanation}");
             Err(anyhow!("attach refused by the anti-cheat denylist"))
         }
@@ -277,19 +174,22 @@ fn cmd_attach(trainer_id: &str, trainers_dir: Option<PathBuf>) -> anyhow::Result
 
 /// Implementation of `proton-trainer apply`: dry-run by default,
 /// writes only with `--apply`.
-fn cmd_apply(trainer_id: &str, trainers_dir: Option<PathBuf>, write: bool) -> anyhow::Result<()> {
+pub fn cmd_apply(
+    trainer_id: &str,
+    trainers_dir: Option<PathBuf>,
+    write: bool,
+) -> anyhow::Result<()> {
     let trainer = find_trainer(trainers_dir.as_ref(), trainer_id)?;
     let denylist = Denylist::embedded().context("the embedded anti-cheat denylist is invalid")?;
-    let report =
-        attach_trainer(&trainer, &denylist).map_err(|error| anyhow!("attach failed: {error}"))?;
-    let session = match &report {
-        pt_tui::live::AttachReport::Running(session) => session.clone(),
-        pt_tui::live::AttachReport::NotRunning(exe_names) => {
+    let report = attach_trainer(&trainer, &denylist).map_err(|e| anyhow!("attach failed: {e}"))?;
+    let session = match report {
+        AttachReport::Running(session) => session,
+        AttachReport::NotRunning(exe_names) => {
             return Err(anyhow!(
                 "no running process found for {exe_names:?}; launch the game first"
             ))
         }
-        pt_tui::live::AttachReport::Refused(explanation) => {
+        AttachReport::Refused(explanation) => {
             eprintln!("REFUSED: {explanation}");
             return Err(anyhow!("attach refused by the anti-cheat denylist"));
         }
@@ -312,8 +212,8 @@ fn cmd_apply(trainer_id: &str, trainers_dir: Option<PathBuf>, write: bool) -> an
 
     println!("Applying {} plan(s):", plans.len());
     print_plans(&plans);
-    let results =
-        pt_tui::live::apply_plans(&plans).map_err(|error| anyhow!("apply failed: {error}"))?;
+    let results = pt_session::session::apply_plans(&plans)
+        .map_err(|error| anyhow!("apply failed: {error}"))?;
     let mut failures = 0;
     for result in &results {
         match &result.outcome {
@@ -330,16 +230,6 @@ fn cmd_apply(trainer_id: &str, trainers_dir: Option<PathBuf>, write: bool) -> an
     if failures > 0 {
         return Err(anyhow!("{failures} of {} entries failed", results.len()));
     }
-    Ok(())
-}
-
-/// Implementation of `proton-trainer tui`.
-fn cmd_tui(trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
-    let dir = resolve_trainers_dir(trainers_dir.as_ref())?;
-    let backend = LiveBackend::new(dir)
-        .map_err(|error| anyhow!("failed to initialize the TUI backend: {error}"))?;
-    let app = App::new(Box::new(backend));
-    run_terminal(app).context("the TUI event loop failed")?;
     Ok(())
 }
 
@@ -362,5 +252,15 @@ mod tests {
     #[test]
     fn resolve_trainers_dir_fails_for_missing_explicit_dir() {
         assert!(resolve_trainers_dir(Some(&PathBuf::from("/nonexistent-xyz"))).is_err());
+    }
+
+    #[test]
+    fn print_games_handles_empty_results() {
+        let result = ScanResult {
+            scanned_at_unix: 0,
+            games: Vec::new(),
+        };
+        // Must not panic on an empty list.
+        print_games(&result);
     }
 }

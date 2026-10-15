@@ -37,8 +37,10 @@ are out of scope, forever.
   - `pt-discover` — Steam library scan: libraryfolders.vdf parsing, appmanifest
     parsing, compatdata prefix detection, Flatpak + native paths
   - `pt-trainers` — trainer definitions (TOML), parsing, validation
-  - `pt-tui` — ratatui interface
-  - `pt-cli` — the `proton-trainer` binary (clap)
+  - `pt-session` — the session workflow shared by the GUI and the CLI
+    (attach, denylist check, plan, apply, freeze)
+  - `pt-gui` — the `proton-trainer` application: a Tauri 2 GUI (window)
+    plus the headless CLI subcommands (clap)
 - Errors: thiserror in libraries, anyhow in the binary. NO unwrap/expect
   outside tests and main.
 - Logging: tracing + tracing-subscriber (RUST_LOG documented in README).

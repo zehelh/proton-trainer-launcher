@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- Running `proton-trainer` without a subcommand now launches the
-  interactive TUI directly.
+- The application is now a Tauri 2 **graphical interface** (window)
+  instead of a terminal UI: game list, trainer entries, dry-run plan,
+  and apply results as screens; heavy operations run on a worker
+  thread so the window never freezes. `pt-tui` and `pt-cli` are
+  removed; the new `pt-session` crate holds the workflow shared by
+  the GUI and the headless CLI subcommands (`list`, `attach`,
+  `apply`), which remain unchanged.
+- Packaging: the AppImage is now produced by the Tauri bundler in the
+  release workflow (the linuxdeploy packaging is gone); AUR packages
+  gained the `gtk3`/`webkit2gtk-4.1` runtime dependencies.
 
 ## [0.1.0] - 2026-10-15
 

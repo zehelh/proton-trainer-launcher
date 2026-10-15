@@ -4,10 +4,11 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: v0.1.0** — all core features are in place and hardened:
-> Steam discovery, memory engine, trainer definitions, TUI, CLI,
-> packaging. This is a first release: trainer definitions for real
-> games are community content — the shipped ones are examples.
+> **Status: v0.1.1-dev — GUI rewrite.** The application now has a
+> graphical interface (Tauri 2). Steam discovery, the memory engine,
+> trainer definitions, and packaging are unchanged; the headless CLI
+> subcommands remain. Trainer definitions for real games are community
+> content — the shipped ones are examples.
 
 ## Principles
 
@@ -181,19 +182,22 @@ Trainer definitions are resolved from `--trainers-dir`, then
 `$XDG_CONFIG_HOME/proton-trainer/trainers`, then `./trainers`.
 
 ```bash
-proton-trainer                                # interactive interface (the TUI)
-proton-trainer tui                            # same, explicit
+proton-trainer                                # graphical interface
 proton-trainer attach <trainer-id>            # read-only: print the write plan
 proton-trainer apply <trainer-id>             # dry-run: same plan, nothing written
 proton-trainer apply <trainer-id> --apply     # write, verified, target resumed
 ```
 
-The TUI flow: game list → running-process check (denylist applied) →
-trainer entry list (Space toggles, `a` plan+apply) → dry-run plan →
+The GUI flow: game list → running-process check (denylist applied) →
+trainer entry list (checkboxes, `[freeze]` badges) → dry-run plan →
 apply results. Entries marked `[freeze]` are re-applied in the
 background while the session stays open. Attach is always refused with
 a plain-English explanation when the target matches the anti-cheat
 denylist, and blocked memory access reports the exact ptrace fix.
+
+The GUI is a Tauri 2 application; the system must provide
+`webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base
+image).
 
 ## Logging
 

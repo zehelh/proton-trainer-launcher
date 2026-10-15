@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# AppImage entry point: exec the real binary with the same arguments.
-HERE="$(dirname "$(readlink -f "${0}")")"
-exec "${HERE}/usr/bin/proton-trainer" "$@"

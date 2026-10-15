@@ -1,6 +1,6 @@
 [package]
-name = "pt-tui"
-description = "Terminal user interface for proton-trainer (ratatui)"
+name = "pt-session"
+description = "Trainer session workflow shared by the GUI and the CLI"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,9 +11,8 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-crossterm.workspace = true
 pt-core.workspace = true
 pt-discover.workspace = true
 pt-trainers.workspace = true
-ratatui.workspace = true
+serde.workspace = true
 tracing.workspace = true

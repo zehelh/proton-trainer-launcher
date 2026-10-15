@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>proton-trainer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>proton-trainer</h1>
+      <div class="subtitle">single-player Steam games under Proton</div>
+    </header>
+
+    <main>
+      <!-- Games list -->
+      <section id="screen-games" class="screen">
+        <h2>Installed games with trainers</h2>
+        <ul id="game-list" class="list"></ul>
+        <p id="games-empty" class="hidden note">
+          No installed games with trainer definitions found. Add
+          trainer files to the trainers directory and click Refresh.
+        </p>
+        <div class="actions">
+          <button id="refresh">Refresh</button>
+        </div>
+      </section>
+
+      <!-- Entries of the attached trainer -->
+      <section id="screen-entries" class="screen hidden">
+        <h2 id="entries-title">Entries</h2>
+        <div id="entries-target" class="note"></div>
+        <ul id="entry-list" class="list"></ul>
+        <div class="actions">
+          <button id="plan-selected">Dry-run plan</button>
+          <button id="apply-selected" class="primary">Apply</button>
+          <button id="back-to-games">Back</button>
+        </div>
+      </section>
+
+      <!-- Dry-run plan -->
+      <section id="screen-plan" class="screen hidden">
+        <h2>Dry-run plan (nothing has been written)</h2>
+        <pre id="plan-text"></pre>
+        <div class="actions">
+          <button id="apply-plan" class="primary">Apply</button>
+          <button id="back-to-entries">Back</button>
+        </div>
+      </section>
+
+      <!-- Apply results -->
+      <section id="screen-result" class="screen hidden">
+        <h2>Apply results</h2>
+        <ul id="result-list" class="list"></ul>
+        <div id="freeze-note" class="note hidden"></div>
+        <div class="actions">
+          <button id="back-to-entries-2">Back to entries</button>
+        </div>
+      </section>
+
+      <!-- Banner (errors, refusals, status) -->
+      <div id="banner" class="banner hidden"></div>
+    </main>
+
+    <footer>
+      <span id="status">idle</span>
+    </footer>
+
+    <script src="main.js"></script>
+  </body>
+</html>
