@@ -228,3 +228,9 @@ input[type="text"] {
 input[type="checkbox"] {
   accent-color: var(--teal);
 }
+
+.chevron {
+  margin-left: auto;
+  color: var(--teal);
+  font-size: 0.9rem;
+}

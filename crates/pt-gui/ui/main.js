@@ -7,7 +7,7 @@ const dialog = window.__TAURI__.dialog;
 
 const state = {
   games: [],
-  config: { schema_version: 1, trainers: [], game_trainers: [] },
+  config: { schema_version: 1, trainers: [], game_trainer: [] },
   detail: null, // the GameRow whose detail screen is shown
   entries: [],
   plans: [],
@@ -100,10 +100,11 @@ function renderGames() {
     store.className = "badge";
     store.textContent = game.store;
 
-    const id = document.createElement("small");
-    id.textContent = ` (${game.id})`;
+    const chevron = document.createElement("span");
+    chevron.className = "chevron";
+    chevron.textContent = "\u25B8";
 
-    li.append(name, store, id);
+    li.append(name, store, chevron);
     li.addEventListener("click", () => openDetail(game));
     list.appendChild(li);
   }
@@ -125,8 +126,7 @@ function openDetail(game) {
   clearBanner();
 
   document.getElementById("detail-title").textContent = game.name;
-  document.getElementById("detail-sub").textContent =
-    `${game.store} — ${game.id}` +
+  document.getElementById("detail-sub").textContent = game.store +
     (game.wine_prefix ? ` — prefix: ${game.wine_prefix}` : "");
 
   renderDetailTrainers();
@@ -152,7 +152,7 @@ function renderDetailTrainers() {
   for (const trainer of state.config.trainers) {
     options.push({ label: `${trainer.name} (global)`, path: trainer.path });
   }
-  for (const link of state.config.game_trainers) {
+  for (const link of state.config.game_trainer) {
     if (link.store === game.store && link.game_id === game.id) {
       options.push({ label: `${link.name} (this game)`, path: link.path });
     }
@@ -208,7 +208,7 @@ async function linkTrainer() {
   }
   const path = typeof picked === "string" ? picked : picked[0];
   const name = path.split("/").pop();
-  state.config.game_trainers.push({
+  state.config.game_trainer.push({
     store: state.detail.store,
     game_id: state.detail.id,
     name,
@@ -409,9 +409,9 @@ function renderConfig() {
     .getElementById("no-game-trainers")
     .classList.toggle(
       "hidden",
-      state.config.game_trainers.length > 0,
+      state.config.game_trainer.length > 0,
     );
-  for (const link of state.config.game_trainers) {
+  for (const link of state.config.game_trainer) {
     const li = document.createElement("li");
     li.style.cursor = "default";
     const label = document.createElement("span");
@@ -419,7 +419,7 @@ function renderConfig() {
     const remove = document.createElement("button");
     remove.textContent = "Remove";
     remove.addEventListener("click", async () => {
-      state.config.game_trainers = state.config.game_trainers.filter(
+      state.config.game_trainer = state.config.game_trainer.filter(
         (l) => l !== link,
       );
       await call(
@@ -533,6 +533,9 @@ async function init() {
   const config = await call("get_config", {}, "loading the configuration…");
   if (config !== null) {
     state.config = config;
+    if (!Array.isArray(state.config.game_trainer)) {
+      state.config.game_trainer = [];
+    }
   }
   await refreshGames();
 }
