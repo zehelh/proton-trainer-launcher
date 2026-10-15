@@ -24,6 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic trainers no longer block the game: the game is now started
+  first and waited for (up to 90 s, detecting its umu/wine process
+  by prefix or install path) before the trainer connects. Heroic
+  runs Proton games through umu inside a pressure-vessel container;
+  a trainer started first created a host-side wineserver for the
+  same prefix and the in-container game then waited on it until the
+  trainer closed.
 - Heroic games now actually launch: Heroic 2.22+ ignores a
   `launch <app>` CLI command — launches are requested through the
   `heroic://launch?appName=<id>&gui=false` protocol URL, which also
