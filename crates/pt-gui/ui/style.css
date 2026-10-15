@@ -235,6 +235,15 @@ input[type="checkbox"] {
   accent-color: var(--teal);
 }
 
+select {
+  background: var(--navy-light);
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+}
+
 .chevron {
   margin-left: auto;
   color: var(--teal);

@@ -23,9 +23,12 @@ pub fn steam_launch_args(app_id: u32) -> Vec<String> {
     vec![format!("steam://rungameid/{app_id}")]
 }
 
-/// Arguments passed to the `heroic` client to run one game.
+/// The argument that makes Heroic run a game. Heroic 2.22+ does not
+/// parse a `launch <app>` CLI command: launches are requested through
+/// the `heroic://` protocol URL scanned from the process arguments.
+/// `gui=false` keeps the Heroic window hidden — this is a launcher.
 pub fn heroic_launch_args(app_name: &str) -> Vec<String> {
-    vec!["launch".to_string(), app_name.to_string()]
+    vec![format!("heroic://launch?appName={app_name}&gui=false")]
 }
 
 /// The command that runs a trainer inside a prefix: Proton takes
@@ -844,7 +847,10 @@ mod tests {
 
     #[test]
     fn heroic_args_are_wellformed() {
-        assert_eq!(heroic_launch_args("GuildWars"), vec!["launch", "GuildWars"]);
+        assert_eq!(
+            heroic_launch_args("GuildWars"),
+            vec!["heroic://launch?appName=GuildWars&gui=false"]
+        );
     }
 
     #[test]

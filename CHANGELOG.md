@@ -9,14 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Games list: a search field and a source filter (built from the
+  stores actually present — Steam, Heroic, ...).
 - Configurable protonhax wait: `protonhax_wait_secs` in `config.toml`
   (default 10, `0` checks once without waiting) sets how long a
   trainer launch waits for the game's protonhax environment before
   falling back to a direct prefix run; editable in the Configuration
   tab.
 
+### Changed
+
+- The game detail view no longer shows the Wine prefix path, only
+  the source.
+
 ### Fixed
 
+- Heroic games now actually launch: Heroic 2.22+ ignores a
+  `launch <app>` CLI command — launches are requested through the
+  `heroic://launch?appName=<id>&gui=false` protocol URL, which also
+  keeps the Heroic window hidden when launched from proton-trainer.
 - Heroic games configured with Proton now get the full Steam compat
   environment for the trainer (`STEAM_COMPAT_DATA_PATH` — Heroic's
   `winePrefix` is a compatdata directory, Proton derives the Wine

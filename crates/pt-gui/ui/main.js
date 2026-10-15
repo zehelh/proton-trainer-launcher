@@ -111,10 +111,23 @@ async function callVoid(name, args, busyLabel) {
 function renderGames() {
   const list = document.getElementById("game-list");
   list.replaceChildren();
+
+  const search = document
+    .getElementById("game-search")
+    .value.trim()
+    .toLowerCase();
+  const store = document.getElementById("store-filter").value;
+  const games = state.games.filter(
+    (game) =>
+      (!store || game.store === store) &&
+      (!search || game.name.toLowerCase().includes(search)),
+  );
+
+  renderStoreFilter();
   document
     .getElementById("games-empty")
-    .classList.toggle("hidden", state.games.length > 0);
-  for (const game of state.games) {
+    .classList.toggle("hidden", games.length > 0);
+  for (const game of games) {
     const li = document.createElement("li");
 
     const name = document.createElement("span");
@@ -143,6 +156,28 @@ async function refreshGames() {
   }
 }
 
+// Rebuilds the source filter from the stores actually present in
+// the games list (Steam, Heroic, ...), keeping the selection.
+function renderStoreFilter() {
+  const select = document.getElementById("store-filter");
+  const selected = select.value;
+  select.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All sources";
+  select.appendChild(all);
+  const stores = [...new Set(state.games.map((game) => game.store))].sort();
+  for (const store of stores) {
+    const option = document.createElement("option");
+    option.value = store;
+    option.textContent = store;
+    select.appendChild(option);
+  }
+  select.value = [...select.options].some((o) => o.value === selected)
+    ? selected
+    : "";
+}
+
 // -------------------------------------------------------------- detail
 
 function openDetail(game) {
@@ -150,8 +185,7 @@ function openDetail(game) {
   clearBanner();
 
   document.getElementById("detail-title").textContent = game.name;
-  document.getElementById("detail-sub").textContent = game.store +
-    (game.wine_prefix ? ` — prefix: ${game.wine_prefix}` : "");
+  document.getElementById("detail-sub").textContent = game.store;
 
   renderDetailTrainers();
 
@@ -531,6 +565,12 @@ function wire() {
     .addEventListener("click", () => setTab("config"));
 
   document.getElementById("refresh").addEventListener("click", refreshGames);
+  document
+    .getElementById("game-search")
+    .addEventListener("input", renderGames);
+  document
+    .getElementById("store-filter")
+    .addEventListener("change", renderGames);
   document
     .getElementById("back-to-games")
     .addEventListener("click", refreshGames);
