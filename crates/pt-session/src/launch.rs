@@ -121,26 +121,65 @@ fn proton_candidate(tool_dir: &Path) -> Option<PathBuf> {
     .find(|candidate| candidate.is_file())
 }
 
-/// Resolves a compatibility tool name to its proton binary.
+/// Resolves a compatibility tool name to its proton binary. Steam
+/// stores names that do not always match the directory (e.g.
+/// `GE-Proton11-7-x86_64` vs the directory `GE-Proton11-7`), so after
+/// the exact matches, a prefix-tolerant lookup runs.
 fn proton_for_tool(steam_root: &Path, game_steamapps: &Path, tool: &str) -> Option<PathBuf> {
-    proton_candidate(&steam_root.join("compatibilitytools.d").join(tool))
-        .or_else(|| proton_candidate(&steam_root.join("steamapps").join("common").join(tool)))
-        .or_else(|| proton_candidate(&game_steamapps.join("common").join(tool)))
+    if let Some(proton) = proton_candidate(&steam_root.join("compatibilitytools.d").join(tool)) {
+        return Some(proton);
+    }
+    if let Some(proton) = proton_candidate(&steam_root.join("steamapps").join("common").join(tool))
+    {
+        return Some(proton);
+    }
+    if let Some(proton) = proton_candidate(&game_steamapps.join("common").join(tool)) {
+        return Some(proton);
+    }
+    // Prefix-tolerant: a directory whose name is a prefix of the tool
+    // name, or the reverse.
+    let custom = steam_root.join("compatibilitytools.d");
+    if let Ok(entries) = std::fs::read_dir(&custom) {
+        for entry in entries.flatten() {
+            let dir_name = entry.file_name();
+            let Some(dir_name) = dir_name.to_str() else {
+                continue;
+            };
+            if tool.starts_with(dir_name) || dir_name.starts_with(tool) {
+                if let Some(proton) = proton_candidate(&entry.path()) {
+                    return Some(proton);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Reads the compat tool name mapped to one app from `config.vdf`.
+///
+/// Games without an explicit override run with Steam's **default**
+/// tool, which is stored under the `"0"` key of `CompatToolMapping` —
+/// so that key is the fallback. Using anything else than the game's
+/// actual tool makes Proton try to upgrade the game's prefix.
 pub fn compat_tool_name(config_vdf: &Path, app_id: u32) -> Option<String> {
     let text = std::fs::read_to_string(config_vdf).ok()?;
     let root = pt_discover::vdf::parse(&text).ok()?;
-    root.get("InstallConfigStore")?
+    let mapping = root
+        .get("InstallConfigStore")?
         .get("Software")?
         .get("Valve")?
         .get("Steam")?
-        .get("CompatToolMapping")?
-        .get(&app_id.to_string())?
-        .get("name")?
-        .as_str()
-        .map(str::to_string)
+        .get("CompatToolMapping")?;
+    for key in [app_id.to_string(), "0".to_string()] {
+        if let Some(name) = mapping
+            .get(&key)
+            .and_then(|entry| entry.get("name"))
+            .and_then(|name| name.as_str())
+        {
+            return Some(name.to_string());
+        }
+    }
+    None
 }
 
 /// Launches a game without any trainer.
@@ -216,8 +255,13 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 .parent()
                 .map(|parent| parent.to_path_buf())
                 .unwrap_or_else(|| prefix.clone());
+            let steam_env = SteamTrainerEnv {
+                compat_data,
+                steam_root: steam_root.clone(),
+                app_id,
+            };
             let (program, args) = trainer_run_args(&proton, trainer);
-            run_trainer(&program, &args, &prefix, Some(&compat_data))
+            run_trainer(&program, &args, &prefix, Some(&steam_env))
         }
         GameStore::Heroic => {
             let prefix = game
@@ -275,6 +319,17 @@ fn wait_for_steam_prefix(steamapps: &Path, app_id: u32) -> Result<PathBuf, Strin
     }
 }
 
+/// The Steam environment a trainer needs in the game's prefix.
+#[derive(Debug, Clone)]
+pub struct SteamTrainerEnv {
+    /// `STEAM_COMPAT_DATA_PATH`: the game's compatdata directory.
+    pub compat_data: PathBuf,
+    /// `STEAM_COMPAT_CLIENT_INSTALL_PATH`: the primary Steam root.
+    pub steam_root: PathBuf,
+    /// `STEAM_COMPAT_APP_ID`: the game's app id.
+    pub app_id: u32,
+}
+
 /// Runs the trainer inside a prefix, detached from this process. The
 /// trainer's stdout and stderr are appended to the application log so
 /// launch failures are diagnosable after the fact.
@@ -282,15 +337,18 @@ fn run_trainer(
     program: &Path,
     args: &[PathBuf],
     prefix: &Path,
-    steam_compat_data: Option<&Path>,
+    steam_env: Option<&SteamTrainerEnv>,
 ) -> Result<(), String> {
     let mut command = std::process::Command::new(program);
     command
         .env("WINEPREFIX", prefix)
         .args(args)
         .stdin(std::process::Stdio::null());
-    if let Some(compat_data) = steam_compat_data {
-        command.env("STEAM_COMPAT_DATA_PATH", compat_data);
+    if let Some(env) = steam_env {
+        command
+            .env("STEAM_COMPAT_DATA_PATH", &env.compat_data)
+            .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", &env.steam_root)
+            .env("STEAM_COMPAT_APP_ID", env.app_id.to_string());
     }
     let mut logged = false;
     if let Ok(log) = crate::logging::log_file() {
@@ -489,6 +547,42 @@ mod tests {
             find_proton(&steam_root, &game_steamapps, 7),
             Some(proton.join("proton"))
         );
+    }
+
+    #[test]
+    fn compat_tool_name_falls_back_to_the_default_tool() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config.vdf");
+        std::fs::write(
+            &config,
+            "\"InstallConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"CompatToolMapping\"\n\t\t\t\t{\n\t\t\t\t\t\"42\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"name\"\t	\"GE-Proton10-34\"\n\t\t\t\t\t}\n\t\t\t\t\t\"0\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"name\"\t	\"GE-Proton11-7-x86_64\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n",
+        )
+        .unwrap();
+        // Explicit override wins.
+        assert_eq!(
+            compat_tool_name(&config, 42),
+            Some("GE-Proton10-34".to_string())
+        );
+        // Unmapped games use the default tool stored under "0".
+        assert_eq!(
+            compat_tool_name(&config, 2246340),
+            Some("GE-Proton11-7-x86_64".to_string())
+        );
+    }
+
+    #[test]
+    fn tool_names_resolve_prefix_tolerantly() {
+        // Steam stores "GE-Proton11-7-x86_64"; the directory is
+        // "GE-Proton11-7".
+        let dir = tempfile::tempdir().unwrap();
+        let steam_root = dir.path();
+        let steamapps = steam_root.join("steamapps");
+        let tool = steam_root.join("compatibilitytools.d/GE-Proton11-7");
+        std::fs::create_dir_all(&tool).unwrap();
+        std::fs::write(tool.join("proton"), "#!/bin/sh\n").unwrap();
+
+        let proton = proton_for_tool(steam_root, &steamapps, "GE-Proton11-7-x86_64");
+        assert_eq!(proton, Some(tool.join("proton")));
     }
 
     #[test]

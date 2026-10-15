@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Launch with trainer: games without an explicit compat-tool override
+  now resolve to Steam's **default tool** (`CompatToolMapping` key
+  `"0"`) instead of the newest custom tool — running a trainer with
+  the wrong Proton made it try to upgrade the game's prefix.
+- Tool names that do not match their directory (e.g. Steam's
+  `GE-Proton11-7-x86_64` vs the directory `GE-Proton11-7`) now
+  resolve prefix-tolerantly.
+- The trainer's Proton environment now includes
+  `STEAM_COMPAT_CLIENT_INSTALL_PATH` and `STEAM_COMPAT_APP_ID`
+  (modern Proton crashes without the former).
+
 - GUI: adding a global trainer or linking a trainer to a game now
   refreshes the list immediately (void commands resolved to `null`,
   which the frontend mistook for failure).
