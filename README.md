@@ -181,10 +181,11 @@ Trainer definitions are resolved from `--trainers-dir`, then
 `$XDG_CONFIG_HOME/proton-trainer/trainers`, then `./trainers`.
 
 ```bash
+proton-trainer                                # interactive interface (the TUI)
+proton-trainer tui                            # same, explicit
 proton-trainer attach <trainer-id>            # read-only: print the write plan
 proton-trainer apply <trainer-id>             # dry-run: same plan, nothing written
 proton-trainer apply <trainer-id> --apply     # write, verified, target resumed
-proton-trainer tui                            # interactive interface
 ```
 
 The TUI flow: game list → running-process check (denylist applied) →

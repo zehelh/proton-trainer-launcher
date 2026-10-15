@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Running `proton-trainer` without a subcommand now launches the
+  interactive TUI directly.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added

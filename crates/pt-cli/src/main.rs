@@ -1,6 +1,7 @@
 //! The `proton-trainer` command-line binary.
 //!
-//! Subcommands:
+//! Running the binary without a subcommand launches the interactive
+//! TUI. Subcommands:
 //!
 //! - `list` — installed Steam games (milestone P1)
 //! - `attach <trainer-id>` — dry-run plan, read-only (P4)
@@ -26,9 +27,7 @@ use std::path::PathBuf;
 #[command(
     name = "proton-trainer",
     version = env!("CARGO_PKG_VERSION"),
-    about,
-    arg_required_else_help = true,
-    subcommand_required = true
+    about
 )]
 struct Cli {
     /// Log filter override (defaults to RUST_LOG, then "info").
@@ -42,8 +41,9 @@ struct Cli {
     #[arg(long, global = true)]
     trainers_dir: Option<PathBuf>,
 
+    /// Without a subcommand, the interactive TUI launches.
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -101,10 +101,13 @@ fn main() -> anyhow::Result<()> {
     );
 
     match cli.command {
-        Commands::List { cached } => cmd_list(cached),
-        Commands::Attach { trainer_id, .. } => cmd_attach(&trainer_id, cli.trainers_dir),
-        Commands::Apply { trainer_id, apply } => cmd_apply(&trainer_id, cli.trainers_dir, apply),
-        Commands::Tui => cmd_tui(cli.trainers_dir),
+        None => cmd_tui(cli.trainers_dir),
+        Some(Commands::List { cached }) => cmd_list(cached),
+        Some(Commands::Attach { trainer_id, .. }) => cmd_attach(&trainer_id, cli.trainers_dir),
+        Some(Commands::Apply { trainer_id, apply }) => {
+            cmd_apply(&trainer_id, cli.trainers_dir, apply)
+        }
+        Some(Commands::Tui) => cmd_tui(cli.trainers_dir),
     }
 }
 
