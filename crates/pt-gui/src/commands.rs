@@ -93,14 +93,21 @@ pub async fn launch(row: GameRow) -> Result<(), String> {
 
 /// Launches a game and runs the trainer in its Wine/Proton prefix.
 /// Blocking (waits for the prefix on first runs), hence the worker
-/// thread.
+/// thread. Returns an optional user-facing warning when the trainer
+/// had to be started a suboptimal way (e.g. outside the game's
+/// container).
 #[tauri::command]
-pub async fn launch_trainer(row: GameRow, trainer_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
+pub async fn launch_trainer(row: GameRow, trainer_path: String) -> Result<Option<String>, String> {
+    let warning = tauri::async_runtime::spawn_blocking(move || {
         launch_with_trainer(&row, Path::new(&trainer_path))
     })
     .await
-    .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())??;
+    Ok(if warning.is_empty() {
+        None
+    } else {
+        Some(warning)
+    })
 }
 
 /// Runs `work` with the session lock on a blocking thread.

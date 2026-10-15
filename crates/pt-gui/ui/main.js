@@ -155,6 +155,10 @@ function openDetail(game) {
 
   renderDetailTrainers();
 
+  document
+    .getElementById("steam-container-note")
+    .classList.toggle("hidden", game.store !== "Steam");
+
   const nativeCard = document.getElementById("native-card");
   if (game.native_trainer) {
     nativeCard.classList.remove("hidden");
@@ -205,16 +209,20 @@ async function launchPlain() {
 }
 
 async function launchTrainer(trainerPath) {
-  if (
-    await callVoid(
-      "launch_trainer",
-      { row: state.detail, trainerPath },
-      "launching the game, then the trainer in its prefix (may wait up to 90 s for the game)…",
-    )
-  ) {
+  const warning = await call(
+    "launch_trainer",
+    { row: state.detail, trainerPath },
+    "launching the game, then the trainer in its prefix (may wait up to 90 s for the game)…",
+  );
+  if (warning === null) {
+    return; // error banner already shown by call()
+  }
+  if (warning) {
+    banner("warn", warning);
+  } else {
     banner(
       "info",
-      "Game launched; the trainer is running in the game's prefix. Details in the log file.",
+      "Game launched; the trainer is running in the game's container. Details in the log file.",
     );
   }
 }

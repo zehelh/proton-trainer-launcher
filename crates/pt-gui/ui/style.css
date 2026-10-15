@@ -160,6 +160,12 @@ button:disabled {
   color: var(--text);
 }
 
+.banner.warn {
+  background: #2b2410;
+  border: 1px solid #d4a72c;
+  color: #fde68a;
+}
+
 footer {
   padding: 0.4rem 1.2rem;
   border-top: 1px solid var(--navy-light);

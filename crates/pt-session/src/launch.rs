@@ -220,7 +220,11 @@ pub fn launch_game(game: &GameRow) -> Result<(), String> {
 ///
 /// Returns a human-readable message when the game cannot be launched,
 /// the prefix never appears, or no Wine/Proton binary can be found.
-pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String> {
+///
+/// On success the `Ok` value is an optional user-facing warning: an
+/// empty string means everything went the intended way, a non-empty
+/// string explains a fallback the user should know about.
+pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, String> {
     if !trainer.is_file() {
         return Err(format!("trainer not found: {}", trainer.display()));
     }
@@ -286,6 +290,40 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 )
             })?;
             tracing::info!(proton = %proton.display(), "proton located");
+            // Steam Proton games run inside a pressure-vessel/bwrap
+            // container (Steam Linux Runtime). A trainer spawned
+            // outside it cannot join the game's wineserver and dies
+            // within seconds, even in the same prefix. protonhax
+            // (started by the game itself via `protonhax init
+            // %command%` in its Steam launch options) lets us run the
+            // trainer INSIDE the game's container. When protonhax is
+            // not usable we fall back to a direct prefix run — which
+            // works only outside containers — and tell the user.
+            if which("protonhax") {
+                if wait_for_protonhax_env(app_id) {
+                    tracing::info!(
+                        app_id,
+                        "protonhax environment ready; joining the game's container"
+                    );
+                    let (program, args) = protonhax_run_args(app_id, trainer);
+                    // protonhax sources WINEPREFIX and the whole
+                    // Proton environment from the env dir the game
+                    // exported; setting our own would fight it.
+                    run_trainer(&program, &args, None, None)?;
+                    return Ok(String::new());
+                }
+                tracing::warn!(
+                    app_id,
+                    "protonhax is installed but exported no environment for this \
+                     game; is `protonhax init %command%` in its Steam launch \
+                     options? Falling back to a direct prefix run"
+                );
+            } else {
+                tracing::warn!(
+                    "protonhax not found on PATH; the trainer will run in the \
+                     prefix directly and may not survive Steam's container"
+                );
+            }
             let compat_data = prefix
                 .parent()
                 .map(|parent| parent.to_path_buf())
@@ -296,7 +334,8 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 app_id,
             };
             let (program, args) = trainer_run_args(&proton, trainer);
-            run_trainer(&program, &args, &prefix, Some(&steam_env))
+            run_trainer(&program, &args, Some(&prefix), Some(&steam_env))?;
+            Ok(PROTONHAX_HINT.to_string())
         }
         GameStore::Heroic => {
             let prefix = game
@@ -315,8 +354,72 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
                 "heroic wine configuration located"
             );
             let (program, args) = trainer_run_args(&wine_bin, trainer);
-            run_trainer(&program, &args, &prefix, None)
+            run_trainer(&program, &args, Some(&prefix), None)?;
+            Ok(String::new())
         }
+    }
+}
+
+/// The user-facing hint shown when the trainer could not be run
+/// inside the game's container and a direct prefix run was used
+/// instead (likely to die on Steam Linux Runtime games).
+const PROTONHAX_HINT: &str = "The trainer was started in the game's prefix directly. \
+     Steam games running in the Steam Linux Runtime container need \
+     `protonhax init %command%` in their Steam launch options \
+     (Steam \u{2192} Properties \u{2192} Launch Options) so the trainer can \
+     join the game's container and survive.";
+
+/// How long to wait for the game's protonhax env dir to appear.
+const PROTONHAX_WAIT: Duration = Duration::from_secs(30);
+
+/// Poll interval while waiting for the protonhax env dir.
+const PROTONHAX_POLL: Duration = Duration::from_secs(1);
+
+/// The command that runs a trainer inside the game's container:
+/// `protonhax run <appid> <exe>`.
+pub fn protonhax_run_args(app_id: u32, trainer: &Path) -> (PathBuf, Vec<PathBuf>) {
+    (
+        PathBuf::from("protonhax"),
+        vec![
+            "run".into(),
+            app_id.to_string().into(),
+            trainer.to_path_buf(),
+        ],
+    )
+}
+
+/// The env directory protonhax writes when a game starts with
+/// `protonhax init %command%`: `<XDG_RUNTIME_DIR>/protonhax/<appid>`.
+/// `runtime_dir` is the value of `XDG_RUNTIME_DIR`.
+pub fn protonhax_env_dir(runtime_dir: &Path, app_id: u32) -> PathBuf {
+    runtime_dir.join("protonhax").join(app_id.to_string())
+}
+
+/// Waits until the game's protonhax env dir exists (it is written by
+/// `protonhax init` while the game launches). Returns whether it did.
+fn wait_for_protonhax_env(app_id: u32) -> bool {
+    let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR") else {
+        return false;
+    };
+    wait_for_dir_with(
+        &protonhax_env_dir(Path::new(&runtime_dir), app_id),
+        PROTONHAX_WAIT,
+        PROTONHAX_POLL,
+    )
+}
+
+/// The testable core of [`wait_for_protonhax_env`]: polls until `dir`
+/// exists or the deadline passes.
+fn wait_for_dir_with(dir: &Path, wait: Duration, poll: Duration) -> bool {
+    let deadline = Instant::now() + wait;
+    loop {
+        if dir.is_dir() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(poll);
     }
 }
 
@@ -448,20 +551,22 @@ pub struct SteamTrainerEnv {
     pub app_id: u32,
 }
 
-/// Runs the trainer inside a prefix, detached from this process. The
-/// trainer's stdout and stderr are appended to the application log so
-/// launch failures are diagnosable after the fact.
+/// Runs the trainer detached from this process. The trainer's stdout
+/// and stderr are appended to the application log so launch failures
+/// are diagnosable after the fact. `prefix` sets `WINEPREFIX` unless
+/// the runner manages its own environment (protonhax does — passing
+/// `None` there).
 fn run_trainer(
     program: &Path,
     args: &[PathBuf],
-    prefix: &Path,
+    prefix: Option<&Path>,
     steam_env: Option<&SteamTrainerEnv>,
 ) -> Result<(), String> {
     let mut command = std::process::Command::new(program);
-    command
-        .env("WINEPREFIX", prefix)
-        .args(args)
-        .stdin(std::process::Stdio::null());
+    command.args(args).stdin(std::process::Stdio::null());
+    if let Some(prefix) = prefix {
+        command.env("WINEPREFIX", prefix);
+    }
     if let Some(env) = steam_env {
         command
             .env("STEAM_COMPAT_DATA_PATH", &env.compat_data)
@@ -760,5 +865,48 @@ mod tests {
         };
         let error = launch_with_trainer(&game, Path::new("/nope/trainer.exe")).unwrap_err();
         assert!(error.contains("trainer not found"));
+    }
+
+    #[test]
+    fn protonhax_args_are_wellformed() {
+        let (program, args) = protonhax_run_args(2246340, Path::new("/tmp/Aurora.exe"));
+        assert_eq!(program, PathBuf::from("protonhax"));
+        assert_eq!(
+            args,
+            vec![
+                PathBuf::from("run"),
+                PathBuf::from("2246340"),
+                PathBuf::from("/tmp/Aurora.exe"),
+            ]
+        );
+    }
+
+    #[test]
+    fn protonhax_env_dir_is_under_the_runtime_dir() {
+        let dir = protonhax_env_dir(Path::new("/run/user/1000"), 42);
+        assert_eq!(dir, PathBuf::from("/run/user/1000/protonhax/42"));
+    }
+
+    #[test]
+    fn wait_for_dir_times_out_on_a_missing_dir() {
+        let missing = std::env::temp_dir().join("pt-session-missing-env-dir");
+        let started = Instant::now();
+        let found = wait_for_dir_with(
+            &missing,
+            Duration::from_millis(30),
+            Duration::from_millis(5),
+        );
+        assert!(!found);
+        assert!(started.elapsed() >= Duration::from_millis(30));
+    }
+
+    #[test]
+    fn wait_for_dir_returns_immediately_for_an_existing_dir() {
+        let existing = std::env::temp_dir();
+        assert!(wait_for_dir_with(
+            &existing,
+            Duration::from_millis(30),
+            Duration::from_millis(5)
+        ));
     }
 }

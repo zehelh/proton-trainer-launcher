@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Steam trainers now run INSIDE the game's container via protonhax
+  (`protonhax run <appid> <exe>`). Games under the Steam Linux Runtime
+  run in a pressure-vessel/bwrap container; a trainer spawned outside
+  it died within seconds (`Some threads failed to suspend`) even in
+  the same prefix. Requires `protonhax init %command%` in the game's
+  Steam launch options; without it the app falls back to a direct
+  prefix run and surfaces a warning in the GUI and the log.
+
 - Launch with trainer now WAITS for the game to actually start before
   running the trainer (detecting Steam's `SteamLaunch AppId=<id>`
   reaper process): the trainer used to enter the prefix 47 ms after

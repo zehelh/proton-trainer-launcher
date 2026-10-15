@@ -210,11 +210,25 @@ The GUI has two tabs:
   stored in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
 
 External trainers run inside the game's own Wine/Proton prefix with
-the game's own compatibility tool — the same trick as running them on
-Windows, no launch options to edit. Steam games launch through
+the game's own compatibility tool. Steam games launch through
 `steam://rungameid/<appid>`; Heroic games through the Heroic CLI; on a
 first run the app waits for Steam to create the game's prefix before
 starting the trainer (up to two minutes).
+
+**Steam Linux Runtime (container) note.** Steam runs Proton games
+inside a pressure-vessel/bwrap container; a trainer spawned outside
+it cannot join the game's wineserver and dies within seconds, even in
+the same prefix. proton-trainer therefore runs Steam trainers through
+[protonhax](https://github.com/illnyang/protonhax), which enters the
+game's container. This needs two things:
+
+1. `protonhax` installed (AUR: `protonhax`),
+2. `protonhax init %command%` in the game's launch options
+   (Steam → Properties → Launch Options).
+
+When protonhax cannot be used, the app falls back to running the
+trainer directly in the prefix — that only works for games NOT running
+in a container — and shows a warning. Heroic games are unaffected.
 
 The GUI is a Tauri 2 application; the system must provide
 `webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base
