@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic launches: the store client is now spawned with
+  `ELECTRON_RUN_AS_NODE` stripped (leaking from IDE terminals, it
+  made the Heroic CLI crash with "Cannot find module 'electron'")
+  and with its output appended to the log file, so launch failures
+  are diagnosable. Launching a game with a trainer also fails fast
+  with a clear error when the game's configured Wine/Proton binary
+  no longer exists (e.g. a deleted `Proton-GE Latest` build) —
+  re-select a version in Heroic's game settings.
 - Steam trainers now run INSIDE the game's container via protonhax
   (`protonhax run <appid> <exe>`). Games under the Steam Linux Runtime
   run in a pressure-vessel/bwrap container; a trainer spawned outside

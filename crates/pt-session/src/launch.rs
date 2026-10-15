@@ -202,9 +202,36 @@ pub fn launch_game(game: &GameRow) -> Result<(), String> {
         GameStore::Heroic => {
             tracing::info!(app = %game.id, game = %game.name, "launching via heroic");
             let args = heroic_launch_args(&game.id);
-            spawn_detached(&find_client("heroic", "com.heroicgameslauncher.hgl"), &args)
+            spawn_logged(&find_client("heroic", "com.heroicgameslauncher.hgl"), &args)
         }
     }
+}
+
+/// Validates a Heroic game's Wine/Proton configuration: the binary
+/// must be known AND exist — Heroic keeps absolute paths in
+/// `GamesConfig`, and a deleted Proton build (e.g. an updated
+/// `Proton-GE Latest`) silently breaks every launch until the user
+/// re-selects a version in Heroic's game settings.
+///
+/// # Errors
+///
+/// Returns a human-readable, actionable message when the binary is
+/// missing or does not exist.
+fn validate_heroic_wine(game: &GameRow) -> Result<(), String> {
+    let wine_bin = game
+        .wine_bin
+        .as_deref()
+        .ok_or("this Heroic game has no configured Wine/Proton binary")?;
+    let wine_bin = Path::new(wine_bin);
+    if !wine_bin.is_file() {
+        return Err(format!(
+            "this Heroic game is configured with a Wine/Proton that no \
+             longer exists: {}. Re-select a working version in Heroic \
+             (game settings \u{2192} Wine) and try again",
+            wine_bin.display()
+        ));
+    }
+    Ok(())
 }
 
 /// Launches a game and then runs the trainer executable inside the
@@ -262,6 +289,9 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             }
         }
     } else {
+        // Fail fast: a missing Wine/Proton binary cannot launch the
+        // trainer either, so do not even start the game.
+        validate_heroic_wine(game)?;
         launch_game(game)?;
     }
 
@@ -634,7 +664,29 @@ fn run_trainer(
             .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", &env.steam_root)
             .env("STEAM_COMPAT_APP_ID", env.app_id.to_string());
     }
-    let mut logged = false;
+    attach_log_stdio(&mut command);
+    tracing::info!(
+        program = %program.display(),
+        args = ?args,
+        "spawning the trainer"
+    );
+    command
+        .spawn()
+        .map(|child| tracing::info!(pid = child.id(), "trainer started"))
+        .inspect_err(|error| {
+            tracing::error!(%error, program = %program.display(), "failed to spawn the trainer")
+        })
+        .map_err(|source| {
+            format!(
+                "failed to run the trainer with {}: {source}",
+                program.display()
+            )
+        })
+}
+
+/// Appends the child's stdout and stderr to the application log;
+/// falls back to null stdio when the log file is unavailable.
+fn attach_log_stdio(command: &mut std::process::Command) {
     if let Ok(log) = crate::logging::log_file() {
         let stdout = std::fs::OpenOptions::new()
             .append(true)
@@ -647,27 +699,11 @@ fn run_trainer(
         if let (Ok(stdout), Ok(stderr)) = (stdout, stderr) {
             command.stdout(std::process::Stdio::from(stdout));
             command.stderr(std::process::Stdio::from(stderr));
-            logged = true;
+            return;
         }
     }
-    if !logged {
-        command.stdout(std::process::Stdio::null());
-        command.stderr(std::process::Stdio::null());
-    }
-    tracing::info!(
-        program = %program.display(),
-        args = ?args,
-        "spawning the trainer"
-    );
-    command
-        .spawn()
-        .map(|child| tracing::info!(pid = child.id(), "trainer started"))
-        .map_err(|source| {
-            format!(
-                "failed to run the trainer with {}: {source}",
-                program.display()
-            )
-        })
+    command.stdout(std::process::Stdio::null());
+    command.stderr(std::process::Stdio::null());
 }
 
 /// Finds a store client: the native binary, else the Flatpak.
@@ -683,16 +719,53 @@ fn find_client(binary: &str, flatpak_id: &str) -> (PathBuf, Vec<String>) {
 }
 
 /// Launches a command detached; `prefix_args` precede the URL/args.
+///
+/// `ELECTRON_RUN_AS_NODE` is stripped: it leaks from IDE terminals
+/// (VS Code exports it) and turns Electron-based clients such as
+/// Heroic into plain Node, where they crash with
+/// "Cannot find module 'electron'" instead of launching the game.
 fn spawn_detached(command: &(PathBuf, Vec<String>), args: &[String]) -> Result<(), String> {
     std::process::Command::new(&command.0)
         .args(&command.1)
         .args(args)
+        .env_remove("ELECTRON_RUN_AS_NODE")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .map(|_| ())
         .map_err(|source| format!("failed to launch with {}: {source}", command.0.display()))
+}
+
+/// Launches a store client detached with its output appended to the
+/// application log, so a failed launch (a Heroic CLI error, a missing
+/// Wine binary in Heroic's own settings, ...) is diagnosable after
+/// the fact. [`spawn_detached`]'s Electron note applies here too.
+fn spawn_logged(client: &(PathBuf, Vec<String>), args: &[String]) -> Result<(), String> {
+    let mut command = std::process::Command::new(&client.0);
+    command
+        .args(&client.1)
+        .args(args)
+        .env_remove("ELECTRON_RUN_AS_NODE")
+        .stdin(std::process::Stdio::null());
+    attach_log_stdio(&mut command);
+    tracing::info!(
+        program = %client.0.display(),
+        args = ?args,
+        "spawning the store client"
+    );
+    command
+        .spawn()
+        .map(|child| tracing::info!(pid = child.id(), "store client spawned"))
+        .inspect_err(|error| {
+            tracing::error!(%error, program = %client.0.display(), "failed to spawn the client")
+        })
+        .map_err(|source| {
+            format!(
+                "failed to launch with {}: {source}",
+                client.0.display()
+            )
+        })
 }
 
 /// Returns `true` when the binary is found on PATH.
@@ -1024,5 +1097,54 @@ mod tests {
             hint.contains("`protonhax init %command%`"),
             "hint was: {hint}"
         );
+    }
+
+    #[test]
+    fn heroic_wine_validation_rejects_deleted_binaries() {
+        let game = GameRow {
+            store: GameStore::Heroic,
+            id: "app".to_string(),
+            name: "X".to_string(),
+            native_trainer: None,
+            wine_prefix: Some("/prefix".to_string()),
+            wine_bin: Some("/nonexistent/proton".to_string()),
+            steamapps: None,
+        };
+        let error = validate_heroic_wine(&game).unwrap_err();
+        assert!(error.contains("no longer exists"), "error was: {error}");
+        assert!(error.contains("/nonexistent/proton"), "error was: {error}");
+    }
+
+    #[test]
+    fn heroic_wine_validation_accepts_existing_binaries() {
+        let dir = tempfile::tempdir().unwrap();
+        let wine_bin = dir.path().join("proton");
+        std::fs::write(&wine_bin, b"#!/bin/sh\n").unwrap();
+        let game = GameRow {
+            store: GameStore::Heroic,
+            id: "app".to_string(),
+            name: "X".to_string(),
+            native_trainer: None,
+            wine_prefix: Some("/prefix".to_string()),
+            wine_bin: Some(wine_bin.to_string_lossy().into_owned()),
+            steamapps: None,
+        };
+        assert!(validate_heroic_wine(&game).is_ok());
+    }
+
+    #[test]
+    fn heroic_wine_validation_requires_a_binary() {
+        let game = GameRow {
+            store: GameStore::Heroic,
+            id: "app".to_string(),
+            name: "X".to_string(),
+            native_trainer: None,
+            wine_prefix: Some("/prefix".to_string()),
+            wine_bin: None,
+            steamapps: None,
+        };
+        assert!(validate_heroic_wine(&game)
+            .unwrap_err()
+            .contains("no configured"));
     }
 }

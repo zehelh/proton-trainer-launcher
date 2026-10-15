@@ -243,7 +243,21 @@ Everything — app events, launch steps, and the output of the trainers
 themselves — is appended to
 `~/.local/state/proton-trainer/proton-trainer.log`. When a game or a
 trainer fails to start, that file says why (selected Proton, prefix,
-command line, and the trainer's own stderr).
+command line, and the trainer's own stderr). Store-client output
+(Heroic's CLI) is captured there too.
+
+Two common environment pitfalls:
+
+- IDE terminals (VS Code) export `ELECTRON_RUN_AS_NODE`, which turns
+  Electron-based clients like Heroic into plain Node where they crash
+  with "Cannot find module 'electron'". proton-trainer strips the
+  variable when spawning store clients — launch it from your
+  application menu or a clean terminal if you ever see that error
+  elsewhere.
+- A Heroic game whose configured Wine/Proton was deleted (e.g. an
+  updated `Proton-GE Latest`) cannot launch a trainer; proton-trainer
+  reports the missing binary — re-select a version in Heroic's game
+  settings (Wine tab).
 
 ## Logging
 
