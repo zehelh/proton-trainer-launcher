@@ -22,17 +22,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libgtk-3-dev libssl-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libssl-dev libxdo-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
-      - name: Gate (clippy + tests)
+      # A tag push does NOT run ci.yml (it only triggers on main),
+      # so the release gate must be complete on its own.
+      - name: Gate (fmt + clippy + tests + doc)
         run: |
+          cargo fmt --all --check
           cargo clippy --all-targets --all-features --workspace -- -D warnings
           cargo test --all-features --workspace
+          RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
+
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+      # The AppImage is named after tauri.conf.json's version while
+      # the release artifact is named after the tag: they must match,
+      # or the packaging below fails halfway. Bump BOTH files before
+      # tagging.
+      - name: Check version consistency (tag vs Cargo.toml vs tauri.conf.json)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          TAURI_VERSION="$(jq -r .version crates/pt-gui/tauri.conf.json)"
+          echo "tag=${VERSION} Cargo.toml=${CARGO_VERSION} tauri.conf.json=${TAURI_VERSION}"
+          if [ "$CARGO_VERSION" != "$VERSION" ] || [ "$TAURI_VERSION" != "$VERSION" ]; then
+            echo "::error::version mismatch — bump Cargo.toml and crates/pt-gui/tauri.conf.json to ${VERSION} before tagging"
+            exit 1
+          fi
 
       - name: Package binary tarball
         run: |

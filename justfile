@@ -35,3 +35,8 @@ clippy:
 # Build the rustdoc API documentation.
 doc:
     cargo doc --no-deps --workspace
+
+# Check dependency licenses, advisories, bans, and sources.
+# Requires cargo-deny (cargo install cargo-deny).
+deny:
+    cargo deny check

@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI: `cargo doc` (warnings denied) and `cargo-deny` jobs added; the
+  release gate now runs the FULL tooling set (fmt, clippy, tests,
+  doc, deny) since tag pushes do not trigger the main CI, and it
+  fails loudly when the tag, `Cargo.toml`, and `tauri.conf.json`
+  versions disagree (the AppImage is named after the latter). Tauri
+  system dependencies align with the official docs (`libxdo-dev` on
+  Ubuntu, `pkgconf` in the Arch container).
 - The game detail view no longer shows the Wine prefix path, only
   the source.
 - The source filter is styled like the other inputs (the WebKit
