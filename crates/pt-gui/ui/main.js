@@ -180,12 +180,13 @@ function renderStoreFilter() {
 
 // -------------------------------------------------------------- detail
 
-function openDetail(game) {
+async function openDetail(game) {
   state.detail = game;
   clearBanner();
 
   document.getElementById("detail-title").textContent = game.name;
   document.getElementById("detail-sub").textContent = game.store;
+  renderGameInfo(game);
 
   renderDetailTrainers();
 
@@ -203,6 +204,29 @@ function openDetail(game) {
   }
 
   showScreen("detail");
+}
+
+// Fills the Information card: install path, compatibility tool,
+// and the GE-Proton recommendation when the tool is not a GE build.
+async function renderGameInfo(game) {
+  const card = document.getElementById("info-card");
+  const info = await call("game_info", { row: game }, "reading the game details…");
+  if (info === null) {
+    card.classList.add("hidden");
+    return;
+  }
+  const install = document.getElementById("info-install");
+  install.textContent = info.install_path
+    ? `Install path: ${info.install_path}`
+    : "Install path: unknown";
+  const tool = document.getElementById("info-tool");
+  tool.textContent = info.compat_tool
+    ? `Runs with: ${info.compat_tool}` + (info.runner_bin ? ` (${info.runner_bin})` : "")
+    : "Compatibility tool: unknown";
+  const hint = document.getElementById("info-hint");
+  hint.textContent = info.hint ?? "";
+  hint.classList.toggle("hidden", !info.hint);
+  card.classList.remove("hidden");
 }
 
 function renderDetailTrainers() {

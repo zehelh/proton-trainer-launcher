@@ -156,6 +156,7 @@ fn run_gui(trainers_dir: Option<PathBuf>) -> anyhow::Result<()> {
             commands::save_config,
             commands::launch,
             commands::launch_trainer,
+            commands::game_info,
         ])
         .run(tauri::generate_context!())
         .context("the GUI event loop failed")?;

@@ -581,7 +581,7 @@ fn wait_for_dir_with(dir: &Path, wait: Duration, poll: Duration) -> bool {
 
 /// The primary Steam installation root (where compatibility tools and
 /// `config.vdf` live).
-fn primary_steam_root() -> Result<PathBuf, String> {
+pub(crate) fn primary_steam_root() -> Result<PathBuf, String> {
     let roots = pt_discover::library::default_steam_roots().map_err(|error| error.to_string())?;
     roots
         .first()
@@ -1233,6 +1233,7 @@ mod tests {
             native_trainer: None,
             wine_prefix: None,
             wine_bin: None,
+            install_path: None,
             steamapps: None,
         };
         let error = launch_with_trainer(&game, Path::new("/nope/trainer.exe")).unwrap_err();
@@ -1346,6 +1347,7 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: Some("/nonexistent/proton".to_string()),
+            install_path: None,
             steamapps: None,
         };
         let error = validate_heroic_wine(&game).unwrap_err();
@@ -1365,6 +1367,7 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: Some(wine_bin.to_string_lossy().into_owned()),
+            install_path: None,
             steamapps: None,
         };
         assert!(validate_heroic_wine(&game).is_ok());
@@ -1379,6 +1382,7 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: None,
+            install_path: None,
             steamapps: None,
         };
         assert!(validate_heroic_wine(&game)

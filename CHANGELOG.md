@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Game detail view: an Information card showing the game's real
+  install path and the compatibility tool it runs with (Steam's
+  `CompatToolMapping` / Heroic's configured Wine or Proton), with a
+  GE-Proton recommendation when the tool is not a GE build —
+  GE-Proton ships the more permissive defaults trainers need.
+- Heroic sideloaded games now show their real title and install
+  path, read from `sideload_apps/library.json` (prefix-holder
+  entries stay excluded by prefix name).
 - Configurable game start wait: `game_wait_secs` in `config.toml`
   (default 90 s) sets how long a trainer launch waits for the game
   to actually start before the trainer connects — Steam's launch

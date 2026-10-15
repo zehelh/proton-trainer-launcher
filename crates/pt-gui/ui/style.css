@@ -160,6 +160,14 @@ button:disabled {
   color: var(--text);
 }
 
+.note.hint {
+  background: #2b2410;
+  border: 1px solid #d4a72c;
+  border-radius: 6px;
+  color: #fde68a;
+  padding: 0.6rem 0.8rem;
+}
+
 .banner.warn {
   background: #2b2410;
   border: 1px solid #d4a72c;

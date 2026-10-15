@@ -134,31 +134,47 @@ fn scan_root(root: &Path) -> Result<Vec<HeroicGame>, DiscoverError> {
     }
 
     // Games known only through their configuration: listed by the
-    // installed-games files above are skipped here.
+    // installed-games files above are skipped here. Sideloaded
+    // games know their real title and executable through the
+    // sideload library.
+    let sideload = read_sideload_library(root);
     for (app_name, config) in &game_configs {
         if games.iter().any(|game| game.app_name == *app_name) {
             continue;
         }
-        // Best-effort title: the prefix folder name, else the app name.
-        let title = config
+        // The prefix folder name (the historical best-effort title).
+        let prefix_title = config
             .wine_prefix
             .as_ref()
             .and_then(|prefix| prefix.file_name())
             .and_then(|name| name.to_str())
-            .unwrap_or(app_name)
-            .to_string();
-        // Titles that mark the entry as a shared Wine-prefix holder
-        // rather than a launchable game.
-        if PREFIX_HOLDER_TITLES
-            .iter()
-            .any(|holder| title.eq_ignore_ascii_case(holder))
-        {
+            .map(str::to_string);
+        // Real title when the sideload library knows it; best
+        // effort: the prefix folder name, else the app name.
+        let title = sideload
+            .get(app_name)
+            .and_then(|entry| entry.title.clone())
+            .filter(|title| !title.is_empty())
+            .or_else(|| prefix_title.clone())
+            .unwrap_or_else(|| app_name.clone());
+        // Entries whose PREFIX names them a shared Wine-prefix
+        // holder rather than a launchable game. The check runs on
+        // the prefix name, not the title: the sideload library may
+        // give the holder a real game title.
+        let is_prefix_holder = PREFIX_HOLDER_TITLES.iter().any(|holder| {
+            prefix_title
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case(holder))
+        });
+        if is_prefix_holder {
             continue;
         }
         games.push(HeroicGame {
             app_name: app_name.clone(),
             title,
-            install_path: None,
+            install_path: sideload
+                .get(app_name)
+                .and_then(|entry| entry.install_path.clone()),
             wine_prefix: config.wine_prefix.clone(),
             wine_bin: config.wine_bin.clone(),
             store: HeroicStore::Configured,
@@ -166,6 +182,64 @@ fn scan_root(root: &Path) -> Result<Vec<HeroicGame>, DiscoverError> {
     }
 
     Ok(games)
+}
+
+/// One sideloaded-game entry of `sideload_apps/library.json`.
+#[derive(Debug, Clone)]
+struct SideloadEntry {
+    /// The game's real title, when it has one.
+    title: Option<String>,
+    /// The game's install directory (its executable's parent), when
+    /// known.
+    install_path: Option<PathBuf>,
+}
+
+/// Reads the sideloaded games' titles and executables from
+/// `sideload_apps/library.json`, keyed by app name. Best effort:
+/// a missing file contributes nothing.
+fn read_sideload_library(root: &Path) -> std::collections::BTreeMap<String, SideloadEntry> {
+    #[derive(serde::Deserialize)]
+    struct Library {
+        #[serde(default)]
+        games: Vec<Entry>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        #[serde(rename = "app_name")]
+        app_name: String,
+        #[serde(default)]
+        title: String,
+        #[serde(default)]
+        install: Option<Install>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Install {
+        #[serde(default)]
+        executable: Option<String>,
+    }
+
+    let mut map = std::collections::BTreeMap::new();
+    let Ok(text) = std::fs::read_to_string(root.join("sideload_apps").join("library.json")) else {
+        return map;
+    };
+    let Ok(library) = serde_json::from_str::<Library>(&text) else {
+        return map;
+    };
+    for entry in library.games {
+        let title = (!entry.title.is_empty()).then_some(entry.title);
+        let install_path = entry
+            .install
+            .and_then(|install| install.executable)
+            .and_then(|exe| std::path::Path::new(&exe).parent().map(Path::to_path_buf));
+        map.insert(
+            entry.app_name,
+            SideloadEntry {
+                title,
+                install_path,
+            },
+        );
+    }
+    map
 }
 
 /// Titles of configuration-only entries that hold a shared Wine
@@ -313,6 +387,29 @@ mod tests {
         )
         .unwrap();
 
+        // The sideload library: real titles and executables for the
+        // configured games, including a real title for the
+        // shared-prefix holder (which must stay excluded anyway).
+        std::fs::create_dir_all(root.join("sideload_apps")).unwrap();
+        std::fs::write(
+            root.join("sideload_apps/library.json"),
+            r#"{
+  "games": [
+    {
+      "app_name": "hLiGQ9ZZAyM9dYYiNcbbVF",
+      "title": "Guild Wars (sideloaded)",
+      "install": {"executable": "/home/tester/Games/Heroic/Prefixes/Guild Wars/pfx/drive_c/Gw.exe"}
+    },
+    {
+      "app_name": "cdr7B2wXzrsqhsKv1wLdwW",
+      "title": "Pokemon Gamma Emeraude",
+      "install": {"executable": "/home/tester/Games/Pokemon/PokemonEmerald.exe"}
+    }
+  ]
+}"#,
+        )
+        .unwrap();
+
         // A shared-prefix holder: a GamesConfig entry that is not a
         // game and must stay out of the list.
         std::fs::write(
@@ -397,14 +494,22 @@ mod tests {
         let guild_wars = by_app
             .get("hLiGQ9ZZAyM9dYYiNcbbVF")
             .expect("configured game");
-        assert_eq!(guild_wars.title, "Guild Wars");
+        // Real title from the sideload library, real install path.
+        assert_eq!(guild_wars.title, "Guild Wars (sideloaded)");
+        assert_eq!(
+            guild_wars.install_path,
+            Some(PathBuf::from(
+                "/home/tester/Games/Heroic/Prefixes/Guild Wars/pfx/drive_c"
+            ))
+        );
         assert_eq!(guild_wars.store, HeroicStore::Configured);
         assert_eq!(
             guild_wars.wine_bin,
             Some(PathBuf::from("/opt/Proton-GE/proton"))
         );
 
-        // The shared-prefix holder must be excluded.
+        // The shared-prefix holder must stay excluded even though
+        // the sideload library gives it a real title.
         assert!(!by_app.contains_key("cdr7B2wXzrsqhsKv1wLdwW"));
 
         assert_eq!(games.len(), 3);

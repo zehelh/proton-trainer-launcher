@@ -197,7 +197,11 @@ proton-trainer apply <trainer-id> --apply     # write, verified, target resumed
 The GUI has two tabs:
 
 - **Games** — every installed game from every store (Steam libraries
-  on all disks, native and Flatpak Steam, plus Heroic). Click a game
+  on all disks, native and Flatpak Steam, plus Heroic). The detail
+  view shows the game's install path and the compatibility tool it
+  runs with, with a recommendation to switch to GE-Proton when the
+  tool is not a GE build (GE-Proton ships the more permissive
+  defaults trainers need). Click a game
   to: launch it plain, launch it with one of your **global trainers**
   (Aurora, WeMod, xModHub, ...), launch it with a **per-game trainer**
   you linked to it (e.g. a FLiNG trainer), or — when a native TOML

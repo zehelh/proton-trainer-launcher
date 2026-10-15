@@ -8,6 +8,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use pt_session::info::{game_info as game_info_of, GameInfo};
 use pt_session::launch::{launch_game, launch_with_trainer};
 use pt_session::types::{ApplyResult, AttachOutcome, GameRow, PlanRowView};
 use pt_session::{AppConfig, LiveSession};
@@ -81,6 +82,15 @@ pub async fn get_config() -> Result<AppConfig, String> {
 #[tauri::command]
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
     AppConfig::save_to(&AppConfig::path()?, &config)
+}
+
+/// Collects the detail-view information for one game (install
+/// path, compatibility tool, GE-Proton recommendation).
+#[tauri::command]
+pub async fn game_info(row: GameRow) -> Result<GameInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || game_info_of(&row))
+        .await
+        .map_err(|error| error.to_string())
 }
 
 /// Launches a game without any trainer.
