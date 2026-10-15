@@ -15,9 +15,19 @@ pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 /// before falling back to a direct prefix run.
 pub const DEFAULT_PROTONHAX_WAIT_SECS: u64 = 10;
 
+/// Default seconds to wait for a launched game to actually start
+/// (Steam's launch reaper, Heroic's game executable) before the
+/// trainer connects.
+pub const DEFAULT_GAME_WAIT_SECS: u64 = 90;
+
 /// Serde default for [`AppConfig::protonhax_wait_secs`].
 fn default_protonhax_wait_secs() -> u64 {
     DEFAULT_PROTONHAX_WAIT_SECS
+}
+
+/// Serde default for [`AppConfig::game_wait_secs`].
+fn default_game_wait_secs() -> u64 {
+    DEFAULT_GAME_WAIT_SECS
 }
 
 /// A global trainer: one Windows executable usable with any game
@@ -64,6 +74,14 @@ pub struct AppConfig {
     /// waiting.
     #[serde(default = "default_protonhax_wait_secs")]
     pub protonhax_wait_secs: u64,
+    /// Seconds to wait for a launched game to actually start before
+    /// the trainer connects (Steam: the launch reaper; Heroic: the
+    /// game executable). When the wait runs out, Steam trainers
+    /// launch anyway with a warning and Heroic trainers abort with
+    /// an error — a trainer connecting before the game owns the
+    /// prefix would deadlock it.
+    #[serde(default = "default_game_wait_secs")]
+    pub game_wait_secs: u64,
 }
 
 impl Default for AppConfig {
@@ -73,6 +91,7 @@ impl Default for AppConfig {
             trainers: Vec::new(),
             game_trainers: Vec::new(),
             protonhax_wait_secs: DEFAULT_PROTONHAX_WAIT_SECS,
+            game_wait_secs: DEFAULT_GAME_WAIT_SECS,
         }
     }
 }
@@ -232,6 +251,24 @@ mod tests {
     fn protonhax_wait_defaults_when_the_key_is_absent() {
         let config: AppConfig = toml::from_str("schema_version = 1\n").unwrap();
         assert_eq!(config.protonhax_wait_secs, DEFAULT_PROTONHAX_WAIT_SECS);
+    }
+
+    #[test]
+    fn game_wait_defaults_when_the_key_is_absent() {
+        let config: AppConfig = toml::from_str("schema_version = 1\n").unwrap();
+        assert_eq!(config.game_wait_secs, DEFAULT_GAME_WAIT_SECS);
+    }
+
+    #[test]
+    fn game_wait_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let config = AppConfig {
+            game_wait_secs: 45,
+            ..AppConfig::default()
+        };
+        AppConfig::save_to(&path, &config).unwrap();
+        assert_eq!(AppConfig::load_from(&path).unwrap(), config);
     }
 
     #[test]

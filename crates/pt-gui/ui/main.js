@@ -246,7 +246,7 @@ async function launchTrainer(trainerPath) {
   const warning = await call(
     "launch_trainer",
     { row: state.detail, trainerPath },
-    "launching the game, then the trainer in its prefix (may wait up to 90 s for the game)…",
+    "launching the game, then the trainer in its prefix (waits for the game to start…)",
   );
   if (warning === null) {
     return; // error banner already shown by call()
@@ -494,18 +494,29 @@ function renderConfig() {
 
   document.getElementById("protonhax-wait").value =
     state.config.protonhax_wait_secs ?? 10;
+  document.getElementById("game-wait").value =
+    state.config.game_wait_secs ?? 90;
 }
 
 async function saveSettings() {
-  const secs = Number.parseInt(
+  const protonhax = Number.parseInt(
     document.getElementById("protonhax-wait").value,
     10,
   );
-  if (Number.isNaN(secs) || secs < 0) {
+  if (Number.isNaN(protonhax) || protonhax < 0) {
     banner("error", "The protonhax wait must be a non-negative number of seconds.");
     return;
   }
-  state.config.protonhax_wait_secs = secs;
+  const gameWait = Number.parseInt(
+    document.getElementById("game-wait").value,
+    10,
+  );
+  if (Number.isNaN(gameWait) || gameWait < 1) {
+    banner("error", "The game start wait must be at least 1 second.");
+    return;
+  }
+  state.config.protonhax_wait_secs = protonhax;
+  state.config.game_wait_secs = gameWait;
   if (await callVoid("save_config", { config: state.config }, "saving the settings…")) {
     banner("info", "Settings saved.");
   }

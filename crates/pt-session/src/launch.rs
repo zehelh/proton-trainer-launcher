@@ -425,21 +425,26 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             // game's server to die — so the trainer would only start
             // after the game closes.
             let is_proton = is_proton(&wine_bin);
+            let wait = Duration::from_secs(configured_game_wait_secs());
             if is_proton {
                 let running =
-                    wait_for_heroic_game_exe(game.wine_prefix.as_deref(), GAME_WAIT, POLL_INTERVAL);
+                    wait_for_heroic_game_exe(game.wine_prefix.as_deref(), wait, POLL_INTERVAL);
                 if !running {
-                    tracing::warn!(
-                        game = %game.name,
-                        "the game executable never appeared; launching the trainer anyway"
-                    );
+                    return Err(format!(
+                        "the game executable did not start within {wait_secs} seconds. Raise \
+                         the game start wait in the Configuration tab, or launch the game \
+                         separately and retry — starting the trainer first would block the \
+                         game until the trainer closes",
+                        wait_secs = wait.as_secs()
+                    ));
                 }
-            } else if !wait_for_wineserver(&wine_prefix_dir, GAME_WAIT, POLL_INTERVAL) {
-                tracing::warn!(
-                    game = %game.name,
-                    prefix = %wine_prefix_dir.display(),
-                    "the game's wineserver never appeared; launching the trainer anyway"
-                );
+            } else if !wait_for_wineserver(&wine_prefix_dir, wait, POLL_INTERVAL) {
+                return Err(format!(
+                    "the game's wineserver never appeared within {wait_secs} seconds. \
+                     Raise the game start wait in the Configuration tab, or launch the \
+                     game separately and retry",
+                    wait_secs = wait.as_secs()
+                ));
             }
             // Heroic's `winePrefix` for a Proton game is a compatdata
             // directory — the Wine prefix is `<dir>/pfx`, created by
@@ -584,16 +589,27 @@ fn primary_steam_root() -> Result<PathBuf, String> {
         .ok_or_else(|| "no Steam installation found".to_string())
 }
 
-/// How long to wait for the game's process to appear before starting
-/// the trainer anyway.
-const GAME_WAIT: Duration = Duration::from_secs(90);
-
 /// Interval between checks for the game's process.
 const GAME_POLL: Duration = Duration::from_secs(2);
 
 /// How often the launch URL is re-sent while the game has not
 /// appeared (Steam ignores duplicates; this forces the launch).
 const GAME_RETRY: Duration = Duration::from_secs(20);
+
+/// The configured max wait for a launched game to actually start
+/// ([`crate::config::AppConfig::game_wait_secs`]); falls back to
+/// the default when the config cannot be read.
+fn configured_game_wait_secs() -> u64 {
+    crate::config::AppConfig::load()
+        .map(|config| config.game_wait_secs)
+        .unwrap_or_else(|error| {
+            tracing::warn!(
+                %error,
+                "could not read the config; using the default game wait"
+            );
+            crate::config::DEFAULT_GAME_WAIT_SECS
+        })
+}
 
 /// Returns `true` when one argv slice matches Steam's game-launch
 /// reaper: `[.., "SteamLaunch", "AppId=<id>", ..]`.
@@ -755,7 +771,8 @@ fn wait_for_wineserver(prefix: &Path, wait: Duration, poll: Duration) -> bool {
 /// every [`GAME_RETRY`] to force the launch. Returns whether the game
 /// is running.
 fn wait_for_steam_game(app_id: u32, resend: impl Fn()) -> bool {
-    wait_for_steam_game_with(app_id, resend, GAME_WAIT, GAME_POLL, GAME_RETRY)
+    let wait = Duration::from_secs(configured_game_wait_secs());
+    wait_for_steam_game_with(app_id, resend, wait, GAME_POLL, GAME_RETRY)
 }
 
 /// The testable core of [`wait_for_steam_game`]: polls

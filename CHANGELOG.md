@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Configurable game start wait: `game_wait_secs` in `config.toml`
+  (default 90 s) sets how long a trainer launch waits for the game
+  to actually start before the trainer connects — Steam's launch
+  reaper or Heroic's game executable. On Heroic, a timeout now
+  aborts with a clear error instead of risking the old deadlock;
+  editable in the Configuration tab.
 - Games list: a search field and a source filter (built from the
   stores actually present — Steam, Heroic, ...).
 - Heroic configuration-only entries whose prefix marks them as a
