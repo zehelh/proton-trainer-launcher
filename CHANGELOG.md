@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Launch with trainer now WAITS for the game to actually start before
+  running the trainer (detecting Steam's `SteamLaunch AppId=<id>`
+  reaper process): the trainer used to enter the prefix 47 ms after
+  the URL was sent, racing the game's launch. While the game has not
+  appeared, the `steam://rungameid` URL is re-sent every 20 seconds
+  (Steam ignores duplicates) to force the launch; an already-running
+  game is detected instantly; after 90 seconds the trainer starts
+  anyway with a warning in the log.
+
 - Launch with trainer: games without an explicit compat-tool override
   now resolve to Steam's **default tool** (`CompatToolMapping` key
   `"0"`) instead of the newest custom tool — running a trainer with

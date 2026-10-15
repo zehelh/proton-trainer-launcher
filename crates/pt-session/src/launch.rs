@@ -224,7 +224,42 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<(), String>
     if !trainer.is_file() {
         return Err(format!("trainer not found: {}", trainer.display()));
     }
-    launch_game(game)?;
+    tracing::info!(
+        game = %game.name,
+        trainer = %trainer.display(),
+        "launching game with trainer"
+    );
+
+    // Steam games must be RUNNING before the trainer enters the
+    // prefix: the trainer's own Wine session races the game's launch
+    // otherwise. While the game has not appeared, the launch URL is
+    // re-sent every 20 seconds (Steam ignores duplicates) to force
+    // the launch — everything stays in the game's own prefix.
+    if game.store == GameStore::Steam {
+        let app_id: u32 = game
+            .id
+            .parse()
+            .map_err(|_| format!("invalid Steam app id {:?}", game.id))?;
+        if steam_game_running(app_id) {
+            tracing::info!(app_id, "game already running");
+        } else {
+            launch_game(game)?;
+            let launched = wait_for_steam_game(app_id, || {
+                let _ = spawn_detached(
+                    &find_client("steam", "com.valvesoftware.Steam"),
+                    &steam_launch_args(app_id),
+                );
+            });
+            if !launched {
+                tracing::warn!(
+                    app_id,
+                    "game did not appear to start; launching the trainer anyway"
+                );
+            }
+        }
+    } else {
+        launch_game(game)?;
+    }
 
     match game.store {
         GameStore::Steam => {
@@ -293,6 +328,89 @@ fn primary_steam_root() -> Result<PathBuf, String> {
         .first()
         .map(|root| root.path.clone())
         .ok_or_else(|| "no Steam installation found".to_string())
+}
+
+/// How long to wait for the game's process to appear before starting
+/// the trainer anyway.
+const GAME_WAIT: Duration = Duration::from_secs(90);
+
+/// Interval between checks for the game's process.
+const GAME_POLL: Duration = Duration::from_secs(2);
+
+/// How often the launch URL is re-sent while the game has not
+/// appeared (Steam ignores duplicates; this forces the launch).
+const GAME_RETRY: Duration = Duration::from_secs(20);
+
+/// Returns `true` when one argv slice matches Steam's game-launch
+/// reaper: `[.., "SteamLaunch", "AppId=<id>", ..]`.
+fn is_reaper_argv(argv: &[&str], app_id: u32) -> bool {
+    let wanted = format!("AppId={app_id}");
+    argv.windows(2)
+        .any(|pair| pair[0] == "SteamLaunch" && pair[1] == wanted)
+}
+
+/// Returns `true` when Steam's reaper for `app_id` is running — the
+/// reliable signal that the game has actually started (used by the
+/// classic trainer launchers).
+pub fn steam_game_running(app_id: u32) -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|n| n.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        let Ok(cmdline) = std::fs::read_to_string(format!("/proc/{pid}/cmdline")) else {
+            continue;
+        };
+        let argv: Vec<&str> = cmdline
+            .split('\0')
+            .filter(|part| !part.is_empty())
+            .collect();
+        if is_reaper_argv(&argv, app_id) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Waits until the game's reaper appears, re-sending the launch URL
+/// every [`GAME_RETRY`] to force the launch. Returns whether the game
+/// is running.
+fn wait_for_steam_game(app_id: u32, resend: impl Fn()) -> bool {
+    wait_for_steam_game_with(app_id, resend, GAME_WAIT, GAME_POLL, GAME_RETRY)
+}
+
+/// The testable core of [`wait_for_steam_game`]: polls
+/// [`steam_game_running`] until the deadline, re-sending the launch
+/// URL every `retry` while the game has not appeared.
+fn wait_for_steam_game_with(
+    app_id: u32,
+    resend: impl Fn(),
+    wait: Duration,
+    poll: Duration,
+    retry: Duration,
+) -> bool {
+    let deadline = Instant::now() + wait;
+    let mut next_retry = Instant::now() + retry;
+    loop {
+        if steam_game_running(app_id) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        if Instant::now() >= next_retry {
+            tracing::info!(app_id, "game not started yet; re-sending the launch URL");
+            resend();
+            next_retry = Instant::now() + retry;
+        }
+        std::thread::sleep(poll);
+    }
 }
 
 /// Waits for `<steamapps>/compatdata/<appid>/pfx` to exist (first
@@ -583,6 +701,50 @@ mod tests {
 
         let proton = proton_for_tool(steam_root, &steamapps, "GE-Proton11-7-x86_64");
         assert_eq!(proton, Some(tool.join("proton")));
+    }
+
+    #[test]
+    fn reaper_argv_matching() {
+        let argv = [
+            "/home/reaper",
+            "SteamLaunch",
+            "AppId=2246340",
+            "--",
+            "bwrap",
+        ];
+        assert!(is_reaper_argv(&argv, 2246340));
+        // App id prefix must not match other ids.
+        assert!(!is_reaper_argv(&argv, 224634));
+        assert!(!is_reaper_argv(&argv, 2246341));
+        // Unrelated processes.
+        assert!(!is_reaper_argv(&["steam", "webhelper"], 2246340));
+    }
+
+    #[test]
+    fn wait_for_game_times_out_and_resends() {
+        // An app id with no reaper running: the wait must time out
+        // and re-send the launch URL on every retry interval.
+        let resends = std::sync::atomic::AtomicUsize::new(0);
+        let started = Instant::now();
+        let running = wait_for_steam_game_with(
+            999_999_123,
+            || {
+                resends.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+            Duration::from_millis(40),
+            Duration::from_millis(5),
+            Duration::from_millis(10),
+        );
+        assert!(!running, "no such game can be running");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= Duration::from_millis(40),
+            "waited out the full window"
+        );
+        assert!(
+            resends.load(std::sync::atomic::Ordering::SeqCst) >= 2,
+            "the launch URL was re-sent"
+        );
     }
 
     #[test]

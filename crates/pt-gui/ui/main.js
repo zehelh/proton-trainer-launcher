@@ -209,7 +209,7 @@ async function launchTrainer(trainerPath) {
     await callVoid(
       "launch_trainer",
       { row: state.detail, trainerPath },
-      "launching the game with the trainer (the prefix may take a while on first run)…",
+      "launching the game, then the trainer in its prefix (may wait up to 90 s for the game)…",
     )
   ) {
     banner(
