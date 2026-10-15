@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic Proton trainers now wait for the game EXECUTABLE to run
+  (detecting umu's `proton waitforexitandrun <exe>` chain) instead
+  of the wineserver socket: the socket appears during the prefix
+  setup, and a trainer launched then raced the game's proton for
+  the prefix and blocked the game. Full flow verified live: game
+  via the heroic:// protocol, trainer via umu-run once the game
+  executable is running — both coexist indefinitely.
 - Heroic Proton trainers now run through `umu-run`, in their own
   umu/pressure-vessel container with the game's environment
   (`UMU_ID`/`WINEPREFIX`/`PROTONPATH`) — the same topology as the

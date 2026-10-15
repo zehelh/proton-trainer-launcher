@@ -411,14 +411,34 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             } else {
                 prefix.clone()
             };
-            if !wait_for_wineserver(&wine_prefix_dir, GAME_WAIT, POLL_INTERVAL) {
+            // The game must be PAST its prefix initialization before
+            // the trainer starts: Heroic launches games through umu
+            // (pressure-vessel container), whose chain runs
+            // `proton waitforexitandrun <game exe>` exactly when the
+            // game executable starts — after the prefix setup where
+            // a second proton (the trainer's) would race it for the
+            // prefix (observed: a trainer launched one second after
+            // the launch request blocked the game until it closed,
+            // while the same trainer launched after the game was up
+            // coexisted indefinitely). The wineserver socket alone is
+            // NOT enough — it appears during the prefix setup.
+            let is_proton = is_proton(&wine_bin);
+            if is_proton {
+                let running =
+                    wait_for_heroic_game_exe(game.wine_prefix.as_deref(), GAME_WAIT, POLL_INTERVAL);
+                if !running {
+                    tracing::warn!(
+                        game = %game.name,
+                        "the game executable never appeared; launching the trainer anyway"
+                    );
+                }
+            } else if !wait_for_wineserver(&wine_prefix_dir, GAME_WAIT, POLL_INTERVAL) {
                 tracing::warn!(
                     game = %game.name,
                     prefix = %wine_prefix_dir.display(),
                     "the game's wineserver never appeared; launching the trainer anyway"
                 );
             }
-            let is_proton = is_proton(&wine_bin);
             // Heroic runs Proton games through umu inside a
             // pressure-vessel container. A trainer spawned next to
             // the game must use the SAME topology — its own umu
@@ -685,6 +705,65 @@ fn wine_socket_roots() -> Vec<PathBuf> {
     }
     roots.push(PathBuf::from("/tmp"));
     roots
+}
+
+/// Returns `true` when a command line is Heroic's launch chain
+/// reaching the game executable: the umu/proton chain runs
+/// `proton waitforexitandrun <game exe>` exactly when the game
+/// starts — after the prefix setup. For sideloaded games the exe
+/// lives under the Wine prefix, which makes the match specific;
+/// without a prefix any `waitforexitandrun` matches (store games
+/// keep their exe outside the prefix).
+fn cmdline_is_game_exe(cmdline: &str, wine_prefix: Option<&str>) -> bool {
+    if !cmdline.contains("waitforexitandrun") {
+        return false;
+    }
+    match wine_prefix.filter(|prefix| !prefix.is_empty()) {
+        Some(prefix) => cmdline.contains(prefix),
+        None => true,
+    }
+}
+
+/// Returns `true` when Heroic's launch chain has reached the game
+/// executable: the umu/proton chain runs
+/// `proton waitforexitandrun <game exe>` exactly when the game
+/// starts — after the prefix setup. The `wine_prefix` makes the
+/// match specific when the game executable lives under it.
+pub fn heroic_game_exe_running(wine_prefix: Option<&str>) -> bool {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        let Ok(cmdline) = std::fs::read_to_string(format!("/proc/{pid}/cmdline")) else {
+            continue;
+        };
+        if cmdline_is_game_exe(&cmdline, wine_prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Waits until the Heroic game executable starts. Returns whether
+/// it did.
+fn wait_for_heroic_game_exe(wine_prefix: Option<&str>, wait: Duration, poll: Duration) -> bool {
+    let deadline = Instant::now() + wait;
+    loop {
+        if heroic_game_exe_running(wine_prefix) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(poll);
+    }
 }
 
 /// Waits until the game's wineserver owns the prefix. Returns
@@ -1364,6 +1443,32 @@ mod tests {
         let (program, args) = umu_run_args(Path::new("/opt/Aurora.exe"));
         assert_eq!(program, PathBuf::from("umu-run"));
         assert_eq!(args, vec![PathBuf::from("/opt/Aurora.exe")]);
+    }
+
+    #[test]
+    fn heroic_game_exe_detection() {
+        let prefix = "/prefixes/Guild Wars";
+        // the game executable starting: umu's proton chain
+        assert!(cmdline_is_game_exe(
+            "/usr/bin/python3\0/opt/GE-Proton/proton\0waitforexitandrun\0/prefixes/Guild Wars/pfx/drive_c/Gw.exe\0",
+            Some(prefix)
+        ));
+        // the prefix setup phase: NOT the game yet
+        assert!(!cmdline_is_game_exe(
+            "/usr/bin/python3\0/opt/GE-Proton/proton\0run\0wineboot\0",
+            Some(prefix)
+        ));
+        // another game's executable (different prefix)
+        assert!(!cmdline_is_game_exe(
+            "/usr/bin/python3\0/opt/GE-Proton/proton\0waitforexitandrun\0/other/game.exe\0",
+            Some(prefix)
+        ));
+        // no prefix configured: any game start matches
+        assert!(cmdline_is_game_exe(
+            "/usr/bin/python3\0/opt/GE-Proton/proton\0waitforexitandrun\0/other/game.exe\0",
+            None
+        ));
+        assert!(!cmdline_is_game_exe("something\0else\0", None));
     }
 
     #[test]
