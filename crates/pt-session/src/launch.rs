@@ -300,6 +300,11 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             // not usable we fall back to a direct prefix run — which
             // works only outside containers — and tell the user.
             if which("protonhax") {
+                tracing::info!(
+                    app_id,
+                    seconds = PROTONHAX_WAIT.as_secs(),
+                    "waiting for the game's protonhax environment"
+                );
                 if wait_for_protonhax_env(app_id) {
                     tracing::info!(
                         app_id,
@@ -314,9 +319,10 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                 }
                 tracing::warn!(
                     app_id,
-                    "protonhax is installed but exported no environment for this \
-                     game; is `protonhax init %command%` in its Steam launch \
-                     options? Falling back to a direct prefix run"
+                    launch_options = ?steam_launch_options(&steam_root, app_id),
+                    "protonhax is installed but the game exported no environment; \
+                     is `protonhax init %command%` in its Steam launch options? \
+                     Falling back to a direct prefix run"
                 );
             } else {
                 tracing::warn!(
@@ -335,7 +341,7 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             };
             let (program, args) = trainer_run_args(&proton, trainer);
             run_trainer(&program, &args, Some(&prefix), Some(&steam_env))?;
-            Ok(PROTONHAX_HINT.to_string())
+            Ok(protonhax_hint(&steam_root, app_id))
         }
         GameStore::Heroic => {
             let prefix = game
@@ -362,12 +368,59 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
 
 /// The user-facing hint shown when the trainer could not be run
 /// inside the game's container and a direct prefix run was used
-/// instead (likely to die on Steam Linux Runtime games).
-const PROTONHAX_HINT: &str = "The trainer was started in the game's prefix directly. \
-     Steam games running in the Steam Linux Runtime container need \
-     `protonhax init %command%` in their Steam launch options \
-     (Steam \u{2192} Properties \u{2192} Launch Options) so the trainer can \
-     join the game's container and survive.";
+/// instead (likely to die on Steam Linux Runtime games). Names the
+/// game's actual Steam launch options when they are known, so the
+/// exact fix is obvious.
+fn protonhax_hint(steam_root: &Path, app_id: u32) -> String {
+    let options = steam_launch_options(steam_root, app_id);
+    let suggestion = match options.as_deref() {
+        Some(options) if options.contains("%command%") => {
+            options.replace("%command%", "protonhax init %command%")
+        }
+        Some(options) if !options.is_empty() => {
+            format!("{options} protonhax init %command%")
+        }
+        _ => "protonhax init %command%".to_string(),
+    };
+    format!(
+        "The trainer was started in the game's prefix directly and may not \
+         survive the game's Steam Linux Runtime container. Set this game's \
+         Steam launch options (Steam \u{2192} Properties \u{2192} Launch Options) to \
+         `{suggestion}` and relaunch, so the trainer can join the game's \
+         container."
+    )
+}
+
+/// The game's launch options as configured in Steam, read from
+/// `userdata/<uid>/config/localconfig.vdf` under the Steam root.
+/// Returns `None` when unknown (missing file or entry, or the game
+/// has no launch options).
+pub fn steam_launch_options(steam_root: &Path, app_id: u32) -> Option<String> {
+    let userdata = steam_root.join("userdata");
+    let users = std::fs::read_dir(userdata).ok()?;
+    for user in users.flatten() {
+        let vdf = user.path().join("config").join("localconfig.vdf");
+        let Ok(text) = std::fs::read_to_string(vdf) else {
+            continue;
+        };
+        let Ok(root) = pt_discover::vdf::parse(&text) else {
+            continue;
+        };
+        let options = root
+            .get("UserLocalConfigStore")
+            .and_then(|v| v.get("Software"))
+            .and_then(|v| v.get("Valve"))
+            .and_then(|v| v.get("Steam"))
+            .and_then(|v| v.get("apps"))
+            .and_then(|v| v.get(&app_id.to_string()))
+            .and_then(|v| v.get("LaunchOptions"))
+            .and_then(|v| v.as_str());
+        if let Some(options) = options {
+            return Some(options.to_string());
+        }
+    }
+    None
+}
 
 /// How long to wait for the game's protonhax env dir to appear.
 const PROTONHAX_WAIT: Duration = Duration::from_secs(30);
@@ -908,5 +961,60 @@ mod tests {
             Duration::from_millis(30),
             Duration::from_millis(5)
         ));
+    }
+
+    /// Writes a `localconfig.vdf` with the given launch options for
+    /// app 2246340 under a fake Steam root.
+    fn steam_root_with_launch_options(options: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("userdata/1/config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(
+            config.join("localconfig.vdf"),
+            format!(
+                "\"UserLocalConfigStore\"\n{{\n\t\"Software\"\n\t{{\n\t\t\"Valve\"\n\t\t{{\n\t\t\t\
+                 \"Steam\"\n\t\t\t{{\n\t\t\t\t\"apps\"\n\t\t\t\t{{\n\t\t\t\t\t\"2246340\"\n\t\t\t\t\t\
+                 {{\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"{options}\"\n\t\t\t\t\t}}\n\t\t\t\t}}\n\t\t\t\
+                 }}\n\t\t}}\n\t}}\n}}\n"
+            ),
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn steam_launch_options_reads_localconfig() {
+        let dir = steam_root_with_launch_options("PROTON_FSR4_UPGRADE=1 %command%");
+        assert_eq!(
+            steam_launch_options(dir.path(), 2246340).as_deref(),
+            Some("PROTON_FSR4_UPGRADE=1 %command%")
+        );
+        assert_eq!(steam_launch_options(dir.path(), 367520), None);
+    }
+
+    #[test]
+    fn steam_launch_options_is_none_without_steam() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(steam_launch_options(dir.path(), 2246340), None);
+    }
+
+    #[test]
+    fn protonhax_hint_suggests_the_exact_new_options() {
+        let dir = steam_root_with_launch_options("PROTON_FSR4_UPGRADE=1 %command%");
+        let hint = protonhax_hint(dir.path(), 2246340);
+        assert!(
+            hint.contains("`PROTON_FSR4_UPGRADE=1 protonhax init %command%`"),
+            "hint was: {hint}"
+        );
+    }
+
+    #[test]
+    fn protonhax_hint_falls_back_to_the_plain_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let hint = protonhax_hint(dir.path(), 2246340);
+        assert!(
+            hint.contains("`protonhax init %command%`"),
+            "hint was: {hint}"
+        );
     }
 }

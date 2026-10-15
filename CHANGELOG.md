@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same prefix. Requires `protonhax init %command%` in the game's
   Steam launch options; without it the app falls back to a direct
   prefix run and surfaces a warning in the GUI and the log.
+- The warning shown on the direct-prefix fallback now reads the
+  game's actual Steam launch options (`localconfig.vdf`) and suggests
+  the exact corrected options (e.g. `PROTON_FSR4_UPGRADE=1
+  protonhax init %command%`); the log also traces the start of the
+  protonhax environment wait (up to 30 s) instead of going silent.
 
 - Launch with trainer now WAITS for the game to actually start before
   running the trainer (detecting Steam's `SteamLaunch AppId=<id>`
