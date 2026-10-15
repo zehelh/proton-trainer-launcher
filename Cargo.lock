@@ -674,6 +674,7 @@ name = "pt-core"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "proptest",
  "thiserror",
  "tracing",
 ]
@@ -683,6 +684,7 @@ name = "pt-discover"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "proptest",
  "serde",
  "tempfile",
  "thiserror",

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-15
+
 ### Added
 
 - Release packaging: GitHub Actions release workflow (tag-triggered)
@@ -28,6 +30,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binaries, sysctl for the AppImage, Flatpak sandbox notes).
 
 ### Changed
+
+- Freeze ticks now honor the project write rules in the background
+  loop too: every tick re-validates the target range against a fresh
+  maps read, writes, and verifies the read-back.
+- `apply` reports the more informative error when both the write and
+  the resume fail (the target died in between).
+- `proton-trainer attach <id> --dry-run` is accepted for explicitness;
+  `attach` never writes either way.
+
+### Hardening (milestone P6)
+
+- Safety pass completed: zero `unwrap`/`expect` outside tests; all
+  `unsafe` blocks carry documented invariants; SIGSTOP/SIGCONT
+  restore verified on all error paths including panics.
+- Fuzz-style property tests for every parser (VDF, app manifests,
+  maps, trainer TOML, denylist): arbitrary input never panics.
+- Freeze re-application proven end to end against the dummy target.
+- `cargo deny check` clean (licenses, advisories, bans, sources).
+
+### Fixed
 
 - The `ptrace_scope = 1` advice now explains that the AppImage cannot
   use `setcap` (its runtime forks) and that `sysctl

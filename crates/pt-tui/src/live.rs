@@ -12,10 +12,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use pt_core::engine::{apply, plan_write};
-use pt_core::maps::read_maps;
+use pt_core::maps::{read_maps, validate_writable_range};
 use pt_core::pattern::scan_process;
 use pt_core::process::{find_processes, TargetProcess};
-use pt_core::write_bytes;
+use pt_core::{read_bytes, write_bytes};
 use pt_discover::{scan, ScanOptions};
 use pt_trainers::loader::load_dir;
 use pt_trainers::{Denylist, Entry, Refusal, Trainer};
@@ -214,21 +214,59 @@ pub fn apply_plans(plans: &[PlanRow]) -> Result<Vec<ApplyResult>, String> {
     Ok(results)
 }
 
-/// One freeze tick: re-writes the frozen plans through the injected
-/// writer. Returns how many writes succeeded.
+/// One freeze tick: re-applies the frozen plans through the injected
+/// writer. Returns how many entries were held.
 ///
 /// # Errors
 ///
-/// Errors are counted as failures; the function itself never fails.
-pub fn freeze_tick_with(
-    plans: &[PlanRow],
-    writer: impl Fn(&PlanRow) -> Result<(), String>,
-) -> usize {
+/// Failures are only counted; the function itself never fails. The
+/// live writer ([`freeze_write`]) re-validates and verifies each write.
+pub fn freeze_tick(plans: &[PlanRow], write_one: impl Fn(&PlanRow) -> Result<(), String>) -> usize {
     plans
         .iter()
         .filter(|row| row.freeze)
-        .filter(|row| writer(row).is_ok())
+        .filter(|row| write_one(row).is_ok())
         .count()
+}
+
+/// One frozen re-write, honoring the project's write rules even in the
+/// background loop: re-validate the target range against a fresh maps
+/// read, write, read back, and verify.
+///
+/// The plan's region data from apply time is never trusted across
+/// ticks: if the game re-mapped the address away, the tick is skipped
+/// instead of writing into whatever lives there now.
+///
+/// # Errors
+///
+/// Returns a human-readable message when validation, the write, or the
+/// verification fails.
+pub fn freeze_write(row: &PlanRow) -> Result<(), String> {
+    let plan = &row.plan;
+    let regions = read_maps(plan.pid).map_err(|error| error.to_string())?;
+    validate_writable_range(
+        &regions,
+        plan.pid,
+        plan.address,
+        plan.address + plan.new_bytes.len() as u64,
+    )
+    .map_err(|error| error.to_string())?;
+    write_bytes(plan.pid, plan.address, &plan.new_bytes).map_err(|error| error.to_string())?;
+    let mut verify = vec![0u8; plan.new_bytes.len()];
+    read_bytes(plan.pid, plan.address, &mut verify).map_err(|error| error.to_string())?;
+    if verify != plan.new_bytes {
+        return Err("read-back verification failed".to_string());
+    }
+    Ok(())
+}
+
+/// [`freeze_write`] with per-entry warning logging, used by the
+/// background loop.
+fn freeze_row(row: &PlanRow) -> Result<(), String> {
+    freeze_write(row).map_err(|error| {
+        tracing::warn!(entry = %row.entry_id, %error, "freeze tick skipped");
+        error
+    })
 }
 
 /// The production backend used by both the TUI and the headless CLI.
@@ -356,10 +394,10 @@ impl Drop for FreezeHandle {
 /// Spawns the freeze loop: re-writes every freeze plan every 33 ms
 /// until the handle is dropped.
 ///
-/// Each tick is a single write without SIGSTOP and without read-back
-/// verification (the value was verified when first applied); the plan
-/// was validated at plan time, and writes to unmapped memory fail
-/// harmlessly in the kernel.
+/// Each tick re-validates the target range against a fresh maps read,
+/// writes, and verifies the read-back (see [`freeze_write`]); no
+/// SIGSTOP is used because a tick is a single small write, never a
+/// multi-write sequence.
 ///
 /// # Errors
 ///
@@ -372,13 +410,7 @@ pub fn spawn_freeze(plans: Vec<PlanRow>) -> Result<FreezeHandle, String> {
         .spawn(move || {
             let freeze_plans: Vec<PlanRow> = plans.into_iter().filter(|row| row.freeze).collect();
             while !thread_stop.load(Ordering::SeqCst) {
-                for row in &freeze_plans {
-                    if let Err(error) =
-                        write_bytes(row.plan.pid, row.plan.address, &row.plan.new_bytes)
-                    {
-                        tracing::warn!(entry = %row.entry_id, %error, "freeze tick failed");
-                    }
-                }
+                freeze_tick(&freeze_plans, freeze_row);
                 std::thread::sleep(FREEZE_INTERVAL);
             }
         })
@@ -439,7 +471,7 @@ mod tests {
     fn freeze_tick_only_touches_freeze_rows() {
         let rows = vec![sample_row(true), sample_row(false)];
         let written: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
-        let count = freeze_tick_with(&rows, |row| {
+        let count = freeze_tick(&rows, |row| {
             written.lock().expect("lock").push(row.entry_id.clone());
             Ok(())
         });
@@ -450,7 +482,7 @@ mod tests {
     #[test]
     fn freeze_tick_counts_failures() {
         let rows = vec![sample_row(true)];
-        let count = freeze_tick_with(&rows, |_| Err("gone".to_string()));
+        let count = freeze_tick(&rows, |_| Err("gone".to_string()));
         assert_eq!(count, 0);
     }
 

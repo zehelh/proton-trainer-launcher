@@ -219,6 +219,7 @@ pub fn validate_writable_range(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     const MAPS: &str = "\
 00400000-00410000 r--p 00000000 00:05 1  /usr/game/game.exe
@@ -246,6 +247,15 @@ mod tests {
         // Kernel mapping: excluded from scans despite being readable.
         assert_eq!(regions[4].pathname.as_deref(), Some("[vvar]"));
         assert!(!regions[4].is_scan_candidate());
+    }
+
+    // Fuzz-style: the maps parser must never panic on arbitrary input.
+    proptest::proptest! {
+        #[test]
+        fn parse_maps_never_panics(lines in prop::collection::vec(any::<char>(), 0..=2048)) {
+            let text: String = lines.into_iter().collect();
+            let _ = parse_maps(42, &text);
+        }
     }
 
     #[test]

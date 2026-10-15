@@ -59,6 +59,10 @@ enum Commands {
     Attach {
         /// Trainer definition id, e.g. `hollow-knight`.
         trainer_id: String,
+        /// Accepted for explicitness; `attach` is always a dry run and
+        /// never writes, with or without this flag.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Apply a trainer's entries. Dry-run by default; writes only with
     /// --apply.
@@ -98,7 +102,7 @@ fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::List { cached } => cmd_list(cached),
-        Commands::Attach { trainer_id } => cmd_attach(&trainer_id, cli.trainers_dir),
+        Commands::Attach { trainer_id, .. } => cmd_attach(&trainer_id, cli.trainers_dir),
         Commands::Apply { trainer_id, apply } => cmd_apply(&trainer_id, cli.trainers_dir, apply),
         Commands::Tui => cmd_tui(cli.trainers_dir),
     }

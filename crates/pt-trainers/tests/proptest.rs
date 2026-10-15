@@ -113,3 +113,12 @@ proptest! {
         prop_assert!(result.is_err() || result.unwrap().id.chars().count() > 0);
     }
 }
+
+// The denylist parser must never panic on arbitrary input either.
+proptest! {
+    #[test]
+    fn denylist_parser_never_panics(text in prop::collection::vec(any::<char>(), 0..=2048)) {
+        let text: String = text.into_iter().collect();
+        let _ = pt_trainers::Denylist::parse(&text);
+    }
+}

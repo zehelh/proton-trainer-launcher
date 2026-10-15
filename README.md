@@ -4,9 +4,10 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha (milestone P5).** All core features are in place
-> (Steam discovery, memory engine, trainer definitions, TUI, CLI).
-> v0.1.0 ships after hardening (milestone P6). See the roadmap below.
+> **Status: v0.1.0** — all core features are in place and hardened:
+> Steam discovery, memory engine, trainer definitions, TUI, CLI,
+> packaging. This is a first release: trainer definitions for real
+> games are community content — the shipped ones are examples.
 
 ## Principles
 

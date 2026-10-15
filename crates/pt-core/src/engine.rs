@@ -102,8 +102,17 @@ pub fn plan_write(pid: i32, address: u64, new_bytes: &[u8]) -> Result<WritePlan,
 pub fn apply(plan: &WritePlan) -> Result<(), CoreError> {
     let mut guard = StopGuard::stop(plan.pid)?;
     let result = apply_stopped(plan);
-    guard.resume()?;
-    result
+    match guard.resume() {
+        Ok(()) => result,
+        // When both the apply and the resume failed, the apply error is
+        // the more informative one; the resume error only matters when
+        // the apply itself succeeded (the target died right after the
+        // verified write).
+        Err(resume_error) => match result {
+            Err(_) => result,
+            Ok(()) => Err(resume_error),
+        },
+    }
 }
 
 /// The write itself, run while the target is stopped.

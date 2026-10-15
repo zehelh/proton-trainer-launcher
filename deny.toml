@@ -16,10 +16,19 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Zlib",
+    # option-ext (transitive via toml) is MPL-2.0: weak copyleft,
+    # fine to link and distribute.
+    "MPL-2.0",
 ]
 
 [advisories]
 version = 2
+ignore = [
+    # paste is unmaintained (RUSTSEC-2024-0436) but is a build-time
+    # proc-macro pulled in by ratatui 0.29; no vulnerability is known.
+    # Revisit when ratatui drops it.
+    "RUSTSEC-2024-0436",
+]
 
 [bans]
 # Duplicated versions are noisy but allowed; deny does not run on every

@@ -18,6 +18,9 @@ libc.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+proptest.workspace = true
+
 # Dummy target used by the integration tests. Built automatically with
 # `cargo test` and located via the CARGO_BIN_EXE_pt-dummy-target env.
 [[bin]]
