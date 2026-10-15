@@ -147,6 +147,14 @@ fn scan_root(root: &Path) -> Result<Vec<HeroicGame>, DiscoverError> {
             .and_then(|name| name.to_str())
             .unwrap_or(app_name)
             .to_string();
+        // Titles that mark the entry as a shared Wine-prefix holder
+        // rather than a launchable game.
+        if PREFIX_HOLDER_TITLES
+            .iter()
+            .any(|holder| title.eq_ignore_ascii_case(holder))
+        {
+            continue;
+        }
         games.push(HeroicGame {
             app_name: app_name.clone(),
             title,
@@ -159,6 +167,12 @@ fn scan_root(root: &Path) -> Result<Vec<HeroicGame>, DiscoverError> {
 
     Ok(games)
 }
+
+/// Titles of configuration-only entries that hold a shared Wine
+/// prefix instead of being a launchable game. `"shared"` is the
+/// conventional name for such a prefix (for example
+/// `~/.Games/Heroic/Prefixes/shared`).
+const PREFIX_HOLDER_TITLES: &[&str] = &["shared"];
 
 /// The subset of a `GamesConfig/<app>.json` file we care about.
 #[derive(Debug, Clone)]
@@ -299,6 +313,20 @@ mod tests {
         )
         .unwrap();
 
+        // A shared-prefix holder: a GamesConfig entry that is not a
+        // game and must stay out of the list.
+        std::fs::write(
+            root.join("GamesConfig/cdr7B2wXzrsqhsKv1wLdwW.json"),
+            r#"{
+  "cdr7B2wXzrsqhsKv1wLdwW": {
+    "winePrefix": "/home/tester/Games/Heroic/Prefixes/shared",
+    "wineVersion": {"bin": "/usr/bin/wine", "name": "wine-11.16", "type": "wine"}
+  },
+  "version": "v2"
+}"#,
+        )
+        .unwrap();
+
         // An Epic game listed by legendary, with its GamesConfig.
         std::fs::create_dir_all(root.join("legendaryConfig/legendary")).unwrap();
         std::fs::write(
@@ -375,6 +403,9 @@ mod tests {
             guild_wars.wine_bin,
             Some(PathBuf::from("/opt/Proton-GE/proton"))
         );
+
+        // The shared-prefix holder must be excluded.
+        assert!(!by_app.contains_key("cdr7B2wXzrsqhsKv1wLdwW"));
 
         assert_eq!(games.len(), 3);
     }

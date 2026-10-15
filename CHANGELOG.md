@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Games list: a search field and a source filter (built from the
   stores actually present — Steam, Heroic, ...).
+- Heroic configuration-only entries whose prefix marks them as a
+  shared-prefix holder (conventional name "shared") are excluded
+  from the game list.
 - Configurable protonhax wait: `protonhax_wait_secs` in `config.toml`
   (default 10, `0` checks once without waiting) sets how long a
   trainer launch waits for the game's protonhax environment before
@@ -21,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The game detail view no longer shows the Wine prefix path, only
   the source.
+- The source filter is styled like the other inputs (the WebKit
+  native look was left in place before).
+
+### Fixed
+
+- Heroic trainers wait for the game's WINESERVER SOCKET
+  (`/tmp/.wine-<uid>/server-<dev>-<inode>/socket`) instead of just a
+  related process: the process check matched umu-run seconds before
+  the game's wine owned the prefix, so the trainer still created a
+  competing host-side wineserver and the game blocked until the
+  trainer closed.
 
 ### Fixed
 

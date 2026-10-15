@@ -180,7 +180,6 @@ pub fn all_games(trainers_dir: &Path) -> Result<Vec<GameRow>, String> {
                 .as_ref()
                 .map(|c| c.prefix.join("pfx").to_string_lossy().to_string()),
             wine_bin: None,
-            install_path: None,
             steamapps: Some(game.steamapps_dir.to_string_lossy().to_string()),
         })
         .collect();
@@ -195,9 +194,6 @@ pub fn all_games(trainers_dir: &Path) -> Result<Vec<GameRow>, String> {
                 .wine_prefix
                 .map(|prefix| prefix.to_string_lossy().to_string()),
             wine_bin: heroic.wine_bin.map(|bin| bin.to_string_lossy().to_string()),
-            install_path: heroic
-                .install_path
-                .map(|path| path.to_string_lossy().to_string()),
             steamapps: None,
         });
     }

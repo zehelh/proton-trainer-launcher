@@ -291,22 +291,6 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
         // trainer either, so do not even start the game.
         validate_heroic_wine(game)?;
         launch_game(game)?;
-        // The GAME must own the prefix's wineserver before the
-        // trainer connects. Heroic runs Proton games through umu
-        // inside a pressure-vessel container (its own PID
-        // namespace); a trainer started first creates a HOST-side
-        // wineserver for the same prefix, and the in-container game
-        // then blocks until that server dies (observed: the game
-        // starts only after the trainer is closed). Waiting for the
-        // game makes the trainer join the game's wineserver as a
-        // client instead.
-        let running = wait_for_heroic_game(game, GAME_WAIT, GAME_POLL);
-        if !running {
-            tracing::warn!(
-                game = %game.name,
-                "the game did not appear to start; launching the trainer anyway"
-            );
-        }
     }
 
     match game.store {
@@ -415,6 +399,28 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                 prefix = %prefix.display(),
                 "heroic wine configuration located"
             );
+            // The GAME's wineserver must own the prefix before the
+            // trainer connects. Heroic runs games through umu inside
+            // a pressure-vessel container; a trainer started first
+            // creates a HOST-side wineserver for the same prefix and
+            // the in-container game then blocks until that server
+            // dies (observed: the game starts only after the trainer
+            // is closed). Waiting for the game's wineserver socket
+            // makes the trainer join it as a plain client instead.
+            // For Proton, the Wine prefix is `<compatdata>/pfx`.
+            let wine_prefix_dir = if is_proton(&wine_bin) {
+                prefix.join("pfx")
+            } else {
+                prefix.clone()
+            };
+            if !wait_for_wineserver(&wine_prefix_dir, GAME_WAIT, POLL_INTERVAL) {
+                tracing::warn!(
+                    game = %game.name,
+                    prefix = %wine_prefix_dir.display(),
+                    "the game's wineserver never appeared; launching the trainer \
+                     anyway — it may create a competing server"
+                );
+            }
             let (program, args) = trainer_run_args(&wine_bin, trainer);
             let env = if is_proton(&wine_bin) {
                 // Heroic's `winePrefix` for a Proton game is a
@@ -606,50 +612,57 @@ pub fn steam_game_running(app_id: u32) -> bool {
     false
 }
 
-/// Returns `true` when a command line references the game: Heroic
-/// (via umu or wine) passes the game executable's Unix path — under
-/// the prefix for sideloaded games, under the install directory
-/// otherwise — so any related process mentions one of the two.
-fn cmdline_references_game(cmdline: &str, game: &GameRow) -> bool {
-    let matches = |needle: &Option<String>| {
-        needle
-            .as_deref()
-            .map(|path| !path.is_empty() && cmdline.contains(path))
-            .unwrap_or(false)
-    };
-    matches(&game.wine_prefix) || matches(&game.install_path)
-}
-
-/// Returns `true` when a process related to the Heroic game (umu-run,
-/// wine, or the game itself) appears to be running.
-pub fn heroic_game_running(game: &GameRow) -> bool {
-    let Ok(entries) = std::fs::read_dir("/proc") else {
+/// Returns `true` when a wineserver is running for the Wine prefix
+/// directory: wine names its socket
+/// `<tmp>/.wine-<uid>/server-<dev>-<inode>/socket`, where `dev` and
+/// `inode` are those of the prefix directory (verified against a
+/// live GE-Proton session). The `socket` file exists exactly while
+/// the server is alive — the definitive signal that the game's wine
+/// owns the prefix, and that a trainer connecting now will be a
+/// plain client rather than a competing server.
+pub fn wineserver_running(prefix: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(meta) = std::fs::metadata(prefix) else {
         return false;
     };
-    for entry in entries.flatten() {
-        let Some(pid) = entry
-            .file_name()
-            .to_str()
-            .and_then(|n| n.parse::<i32>().ok())
-        else {
+    let name = format!("server-{:x}-{:x}", meta.dev(), meta.ino());
+    for root in wine_socket_roots() {
+        let Ok(entries) = std::fs::read_dir(&root) else {
             continue;
         };
-        let Ok(cmdline) = std::fs::read_to_string(format!("/proc/{pid}/cmdline")) else {
-            continue;
-        };
-        if cmdline_references_game(&cmdline, game) {
-            return true;
+        for entry in entries.flatten() {
+            let is_wine_root = entry
+                .file_name()
+                .to_str()
+                .map(|name| name.starts_with(".wine-"))
+                .unwrap_or(false);
+            if is_wine_root && entry.path().join(&name).join("socket").exists() {
+                return true;
+            }
         }
     }
     false
 }
 
-/// Waits until the Heroic game appears to be running (its wineserver
-/// then owns the prefix). Returns whether it did.
-fn wait_for_heroic_game(game: &GameRow, wait: Duration, poll: Duration) -> bool {
+/// The directories wine keeps its `.wine-<uid>` socket roots in:
+/// `$TMPDIR` (when set) and `/tmp`.
+fn wine_socket_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(tmpdir) = std::env::var_os("TMPDIR") {
+        if !tmpdir.is_empty() {
+            roots.push(PathBuf::from(tmpdir));
+        }
+    }
+    roots.push(PathBuf::from("/tmp"));
+    roots
+}
+
+/// Waits until the game's wineserver owns the prefix. Returns
+/// whether it did.
+fn wait_for_wineserver(prefix: &Path, wait: Duration, poll: Duration) -> bool {
     let deadline = Instant::now() + wait;
     loop {
-        if heroic_game_running(game) {
+        if wineserver_running(prefix) {
             return true;
         }
         if Instant::now() >= deadline {
@@ -1124,7 +1137,6 @@ mod tests {
             native_trainer: None,
             wine_prefix: None,
             wine_bin: None,
-            install_path: None,
             steamapps: None,
         };
         let error = launch_with_trainer(&game, Path::new("/nope/trainer.exe")).unwrap_err();
@@ -1238,7 +1250,6 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: Some("/nonexistent/proton".to_string()),
-            install_path: None,
             steamapps: None,
         };
         let error = validate_heroic_wine(&game).unwrap_err();
@@ -1258,7 +1269,6 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: Some(wine_bin.to_string_lossy().into_owned()),
-            install_path: None,
             steamapps: None,
         };
         assert!(validate_heroic_wine(&game).is_ok());
@@ -1273,7 +1283,6 @@ mod tests {
             native_trainer: None,
             wine_prefix: Some("/prefix".to_string()),
             wine_bin: None,
-            install_path: None,
             steamapps: None,
         };
         assert!(validate_heroic_wine(&game)
@@ -1293,46 +1302,26 @@ mod tests {
     }
 
     #[test]
-    fn heroic_cmdline_detection_matches_prefix_and_install_path() {
-        let game = GameRow {
-            store: GameStore::Heroic,
-            id: "app".to_string(),
-            name: "X".to_string(),
-            native_trainer: None,
-            wine_prefix: Some("/prefixes/Guild Wars".to_string()),
-            wine_bin: None,
-            install_path: Some("/opt/game".to_string()),
-            steamapps: None,
-        };
-        // sideloaded game: the exe lives inside the prefix
-        assert!(cmdline_references_game(
-            "/usr/bin/python3\0/usr/bin/umu-run\0/prefixes/Guild Wars/pfx/drive_c/Gw.exe\0",
-            &game
-        ));
-        // store game: the exe lives under the install directory
-        assert!(cmdline_references_game(
-            "/usr/bin/umu-run\0/opt/game/bin/game.exe\0",
-            &game
-        ));
-        // unrelated process
-        assert!(!cmdline_references_game(
-            "/usr/bin/umu-run\0/other/game.exe\0",
-            &game
-        ));
+    fn wineserver_detection_requires_an_existing_prefix() {
+        assert!(!wineserver_running(Path::new(
+            "/nonexistent-prefix-xyz/pfx"
+        )));
     }
 
     #[test]
-    fn heroic_cmdline_detection_never_matches_empty_needles() {
-        let game = GameRow {
-            store: GameStore::Heroic,
-            id: "app".to_string(),
-            name: "X".to_string(),
-            native_trainer: None,
-            wine_prefix: Some(String::new()),
-            wine_bin: None,
-            install_path: Some(String::new()),
-            steamapps: None,
-        };
-        assert!(!cmdline_references_game("anything\0at\0all\0", &game));
+    fn wineserver_detection_finds_a_live_socket() {
+        // A fake wine socket tree for a temporary prefix directory:
+        // <tmp>/.wine-pttest/server-<dev>-<inode>/socket.
+        let prefix = tempfile::tempdir().unwrap();
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(prefix.path()).unwrap();
+        let name = format!("server-{:x}-{:x}", meta.dev(), meta.ino());
+        let wine_root = std::env::temp_dir().join(".wine-pttest");
+        let server_dir = wine_root.join(&name);
+        std::fs::create_dir_all(&server_dir).unwrap();
+        std::fs::write(server_dir.join("socket"), b"").unwrap();
+        assert!(wineserver_running(prefix.path()));
+        std::fs::remove_dir_all(&wine_root).unwrap();
+        assert!(!wineserver_running(prefix.path()));
     }
 }

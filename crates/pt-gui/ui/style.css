@@ -236,12 +236,22 @@ input[type="checkbox"] {
 }
 
 select {
-  background: var(--navy-light);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--navy-light);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%2394a3b8'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
   border: 1px solid var(--muted);
   border-radius: 6px;
   color: var(--text);
-  padding: 0.5rem 0.7rem;
+  padding: 0.5rem 1.8rem 0.5rem 0.7rem;
   font-size: 0.85rem;
+}
+
+select option {
+  background-color: var(--navy-light);
+  color: var(--text);
 }
 
 .chevron {

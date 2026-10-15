@@ -31,9 +31,6 @@ pub struct GameRow {
     pub wine_prefix: Option<String>,
     /// Wine or Proton binary (Heroic per-game configuration).
     pub wine_bin: Option<String>,
-    /// The game's installation directory (Heroic): the game
-    /// executable lives under it, used to detect the running game.
-    pub install_path: Option<String>,
     /// The `steamapps/` directory holding the game (Steam only), used
     /// for Proton detection and prefix waiting.
     pub steamapps: Option<String>,
