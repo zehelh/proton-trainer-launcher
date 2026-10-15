@@ -206,8 +206,11 @@ The GUI has two tabs:
   (the denylist applies there, and blocked memory access reports the
   exact ptrace fix).
 - **Configuration** — manage the global trainers (name + path, as
-  many as you like) and review the per-game links. Everything is
-  stored in `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
+  many as you like), review the per-game links, and set the
+  **protonhax wait** (seconds to wait for a game's protonhax
+  environment before falling back to a direct prefix run; default
+  10, `0` checks once without waiting). Everything is stored in
+  `$XDG_CONFIG_HOME/proton-trainer/config.toml`.
 
 External trainers run inside the game's own Wine/Proton prefix with
 the game's own compatibility tool. Steam games launch through

@@ -131,6 +131,24 @@
         <p id="no-game-trainers" class="note hidden">
           None yet: open a game and use "Link a trainer file…".
         </p>
+
+        <h2>Settings</h2>
+        <div class="form-row">
+          <input
+            id="protonhax-wait"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="10"
+          />
+          <button id="save-settings" class="primary">Save</button>
+        </div>
+        <p class="note">
+          Seconds to wait for a game's protonhax environment (games
+          launched with <code>protonhax init %command%</code>) before
+          falling back to a direct prefix run. Default: 10; 0 checks
+          once without waiting.
+        </p>
       </section>
 
       <div id="banner" class="banner hidden"></div>

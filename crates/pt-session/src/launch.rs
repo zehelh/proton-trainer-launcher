@@ -300,12 +300,21 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             // not usable we fall back to a direct prefix run — which
             // works only outside containers — and tell the user.
             if which("protonhax") {
+                let wait_secs = crate::config::AppConfig::load()
+                    .map(|config| config.protonhax_wait_secs)
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            %error,
+                            "could not read the config; using the default protonhax wait"
+                        );
+                        crate::config::DEFAULT_PROTONHAX_WAIT_SECS
+                    });
                 tracing::info!(
                     app_id,
-                    seconds = PROTONHAX_WAIT.as_secs(),
+                    seconds = wait_secs,
                     "waiting for the game's protonhax environment"
                 );
-                if wait_for_protonhax_env(app_id) {
+                if wait_for_protonhax_env(app_id, Duration::from_secs(wait_secs)) {
                     tracing::info!(
                         app_id,
                         "protonhax environment ready; joining the game's container"
@@ -422,9 +431,6 @@ pub fn steam_launch_options(steam_root: &Path, app_id: u32) -> Option<String> {
     None
 }
 
-/// How long to wait for the game's protonhax env dir to appear.
-const PROTONHAX_WAIT: Duration = Duration::from_secs(30);
-
 /// Poll interval while waiting for the protonhax env dir.
 const PROTONHAX_POLL: Duration = Duration::from_secs(1);
 
@@ -450,13 +456,15 @@ pub fn protonhax_env_dir(runtime_dir: &Path, app_id: u32) -> PathBuf {
 
 /// Waits until the game's protonhax env dir exists (it is written by
 /// `protonhax init` while the game launches). Returns whether it did.
-fn wait_for_protonhax_env(app_id: u32) -> bool {
+/// `wait` comes from the user configuration
+/// ([`crate::config::AppConfig::protonhax_wait_secs`]).
+fn wait_for_protonhax_env(app_id: u32, wait: Duration) -> bool {
     let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR") else {
         return false;
     };
     wait_for_dir_with(
         &protonhax_env_dir(Path::new(&runtime_dir), app_id),
-        PROTONHAX_WAIT,
+        wait,
         PROTONHAX_POLL,
     )
 }

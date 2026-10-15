@@ -11,6 +11,15 @@ use serde::{Deserialize, Serialize};
 /// The only config schema version this release understands.
 pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
+/// Default seconds to wait for a game's protonhax environment
+/// before falling back to a direct prefix run.
+pub const DEFAULT_PROTONHAX_WAIT_SECS: u64 = 10;
+
+/// Serde default for [`AppConfig::protonhax_wait_secs`].
+fn default_protonhax_wait_secs() -> u64 {
+    DEFAULT_PROTONHAX_WAIT_SECS
+}
+
 /// A global trainer: one Windows executable usable with any game
 /// (Aurora, WeMod, xModHub, ...).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +58,12 @@ pub struct AppConfig {
     /// Trainers linked to specific games.
     #[serde(rename = "game_trainer", default)]
     pub game_trainers: Vec<GameTrainer>,
+    /// Seconds to wait for a game's protonhax environment directory
+    /// (games launched with `protonhax init %command%`) before
+    /// falling back to a direct prefix run. `0` checks once without
+    /// waiting.
+    #[serde(default = "default_protonhax_wait_secs")]
+    pub protonhax_wait_secs: u64,
 }
 
 impl Default for AppConfig {
@@ -57,6 +72,7 @@ impl Default for AppConfig {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             trainers: Vec::new(),
             game_trainers: Vec::new(),
+            protonhax_wait_secs: DEFAULT_PROTONHAX_WAIT_SECS,
         }
     }
 }
@@ -210,6 +226,24 @@ mod tests {
         let config =
             AppConfig::load_from(Path::new("/nonexistent-config-xyz/config.toml")).unwrap();
         assert_eq!(config, AppConfig::default());
+    }
+
+    #[test]
+    fn protonhax_wait_defaults_when_the_key_is_absent() {
+        let config: AppConfig = toml::from_str("schema_version = 1\n").unwrap();
+        assert_eq!(config.protonhax_wait_secs, DEFAULT_PROTONHAX_WAIT_SECS);
+    }
+
+    #[test]
+    fn protonhax_wait_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let config = AppConfig {
+            protonhax_wait_secs: 25,
+            ..AppConfig::default()
+        };
+        AppConfig::save_to(&path, &config).unwrap();
+        assert_eq!(AppConfig::load_from(&path).unwrap(), config);
     }
 
     #[test]

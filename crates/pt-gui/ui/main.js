@@ -457,6 +457,24 @@ function renderConfig() {
     li.append(label, remove);
     gameList.appendChild(li);
   }
+
+  document.getElementById("protonhax-wait").value =
+    state.config.protonhax_wait_secs ?? 10;
+}
+
+async function saveSettings() {
+  const secs = Number.parseInt(
+    document.getElementById("protonhax-wait").value,
+    10,
+  );
+  if (Number.isNaN(secs) || secs < 0) {
+    banner("error", "The protonhax wait must be a non-negative number of seconds.");
+    return;
+  }
+  state.config.protonhax_wait_secs = secs;
+  if (await callVoid("save_config", { config: state.config }, "saving the settings…")) {
+    banner("info", "Settings saved.");
+  }
 }
 
 function slugify(text) {
@@ -546,6 +564,9 @@ function wire() {
   document
     .getElementById("browse-trainer")
     .addEventListener("click", browseTrainer);
+  document
+    .getElementById("save-settings")
+    .addEventListener("click", saveSettings);
 }
 
 async function init() {

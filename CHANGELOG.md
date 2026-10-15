@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Configurable protonhax wait: `protonhax_wait_secs` in `config.toml`
+  (default 10, `0` checks once without waiting) sets how long a
+  trainer launch waits for the game's protonhax environment before
+  falling back to a direct prefix run; editable in the Configuration
+  tab.
+
 ### Fixed
 
 - Steam trainers now run INSIDE the game's container via protonhax
