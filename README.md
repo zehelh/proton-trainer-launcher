@@ -234,13 +234,17 @@ trainer directly in the prefix — that only works for games NOT running
 in a container — and shows a warning.
 
 **Heroic (umu) note.** Heroic runs Proton games through
-[umu](https://github.com/Open-Wine-Components/umu-launcher), also
-inside a pressure-vessel container. proton-trainer runs Heroic
-trainers through `umu-run` in their own container with the game's
-environment (`WINEPREFIX`/`PROTONPATH`) — the topology the umu
-community uses for WeMod and friends; a trainer spawned directly on
-the host fights the game's wineserver and blocks the game. umu-run
-is required (bundled with Heroic).
+[umu](https://github.com/Open-Wine-Components/umu-launcher), inside a
+pressure-vessel container that SHARES the host's `/tmp` — so the game
+and anything else on the same prefix share ONE wineserver. umu always
+launches through `proton waitforexitandrun`, which first waits
+(`wineserver -w`) for any existing server of the prefix to die: two
+umu launches therefore serialize, never run in parallel. proton-trainer
+waits until the game executable actually starts (umu's
+`proton waitforexitandrun <game exe>` chain), then runs the trainer
+with the game's Proton in `run` mode — its Wine connects to the live
+game server as a plain client (verified live: game and trainer
+coexist on the one shared server).
 
 The GUI is a Tauri 2 application; the system must provide
 `webkit2gtk-4.1` (present on CachyOS/Arch and in the Bazzite base

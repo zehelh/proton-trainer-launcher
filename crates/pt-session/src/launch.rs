@@ -411,17 +411,19 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             } else {
                 prefix.clone()
             };
-            // The game must be PAST its prefix initialization before
-            // the trainer starts: Heroic launches games through umu
-            // (pressure-vessel container), whose chain runs
+            // The trainer must CONNECT to the game's wineserver, never
+            // create or wait for a competing one. Heroic launches
+            // games through umu: its chain reaches
             // `proton waitforexitandrun <game exe>` exactly when the
-            // game executable starts — after the prefix setup where
-            // a second proton (the trainer's) would race it for the
-            // prefix (observed: a trainer launched one second after
-            // the launch request blocked the game until it closed,
-            // while the same trainer launched after the game was up
-            // coexisted indefinitely). The wineserver socket alone is
-            // NOT enough — it appears during the prefix setup.
+            // game starts — after the prefix setup — so that is the
+            // moment we wait for. The trainer then runs through
+            // `<proton> run`, whose wine connects to the LIVE server
+            // of the game as a plain client (verified live: game and
+            // trainer coexist on ONE shared server). Anything spawned
+            // through umu-run instead runs `waitforexitandrun` too,
+            // which blocks in `wineserver -w` — waiting for the
+            // game's server to die — so the trainer would only start
+            // after the game closes.
             let is_proton = is_proton(&wine_bin);
             if is_proton {
                 let running =
@@ -439,33 +441,12 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
                     "the game's wineserver never appeared; launching the trainer anyway"
                 );
             }
-            // Heroic runs Proton games through umu inside a
-            // pressure-vessel container. A trainer spawned next to
-            // the game must use the SAME topology — its own umu
-            // container with the game's environment — or the two
-            // wineservers fight over the prefix and the game blocks
-            // until the trainer closes (verified live: game +
-            // umu-run trainer coexist, a host-side trainer
-            // deadlocks them). Plain-Wine Heroic games run outside
-            // any container and keep the direct WINEPREFIX flow.
-            let env = if is_proton && which("umu-run") {
-                let Some(proton_tool) = wine_bin.parent() else {
-                    return Err("could not determine the Proton tool directory".to_string());
-                };
-                TrainerEnv::Umu {
-                    wine_prefix: prefix,
-                    proton_tool: proton_tool.to_path_buf(),
-                }
-            } else if is_proton {
-                tracing::warn!(
-                    "umu-run not found on PATH; running the trainer directly in the \
-                     prefix — Heroic games run in a umu container and the trainer \
-                     may conflict with the game's wineserver"
-                );
-                // Heroic's `winePrefix` for a Proton game is a
-                // compatdata directory — the Wine prefix is
-                // `<dir>/pfx`, created by Proton — so the trainer
-                // needs the full Steam compat environment.
+            // Heroic's `winePrefix` for a Proton game is a compatdata
+            // directory — the Wine prefix is `<dir>/pfx`, created by
+            // Proton — so the trainer needs the full Steam compat
+            // environment, exactly like a Steam game. Plain-Wine
+            // Heroic games keep the WINEPREFIX flow.
+            let env = if is_proton {
                 let steam_root = steam_client_root(&wine_bin)
                     .or_else(|| primary_steam_root().ok())
                     .ok_or("could not determine the Steam client path for this Proton")?;
@@ -477,11 +458,7 @@ pub fn launch_with_trainer(game: &GameRow, trainer: &Path) -> Result<String, Str
             } else {
                 TrainerEnv::Wine { prefix }
             };
-            let (program, args) = if matches!(env, TrainerEnv::Umu { .. }) {
-                umu_run_args(trainer)
-            } else {
-                trainer_run_args(&wine_bin, trainer)
-            };
+            let (program, args) = trainer_run_args(&wine_bin, trainer);
             run_trainer(&program, &args, &env)?;
             Ok(String::new())
         }
@@ -546,13 +523,6 @@ pub fn steam_launch_options(steam_root: &Path, app_id: u32) -> Option<String> {
 
 /// Poll interval while waiting for the protonhax env dir.
 const PROTONHAX_POLL: Duration = Duration::from_secs(1);
-
-/// The command that runs a trainer through umu: `umu-run <exe>`.
-/// The environment ([`TrainerEnv::Umu`]) carries the game's Wine
-/// prefix and Proton tool.
-pub fn umu_run_args(trainer: &Path) -> (PathBuf, Vec<PathBuf>) {
-    (PathBuf::from("umu-run"), vec![trainer.to_path_buf()])
-}
 
 /// The command that runs a trainer inside the game's container:
 /// `protonhax run <appid> <exe>`.
@@ -865,17 +835,6 @@ pub enum TrainerEnv {
     /// protonhax: the runner sources its own environment from the
     /// env dir the game exported; nothing must be overridden.
     Managed,
-    /// umu-run (Heroic Proton games): the trainer runs inside its
-    /// own umu/pressure-vessel container with the game's
-    /// environment — the same topology as the game, required for
-    /// the two wineservers to coexist.
-    Umu {
-        /// `WINEPREFIX`: Heroic's compatdata-style prefix directory
-        /// (umu derives the Wine prefix as `<dir>/pfx`).
-        wine_prefix: PathBuf,
-        /// `PROTONPATH`: the Proton tool directory.
-        proton_tool: PathBuf,
-    },
 }
 
 /// Returns `true` when `wine_bin` is a Proton launcher (it takes
@@ -919,16 +878,6 @@ fn run_trainer(program: &Path, args: &[PathBuf], env: &TrainerEnv) -> Result<(),
                 .env("STEAM_COMPAT_DATA_PATH", compat_data)
                 .env("STEAM_COMPAT_CLIENT_INSTALL_PATH", steam_root)
                 .env("STEAM_COMPAT_APP_ID", app_id.to_string());
-        }
-        TrainerEnv::Umu {
-            wine_prefix,
-            proton_tool,
-        } => {
-            command
-                .env("UMU_ID", "umu-0")
-                .env("STORE", "none")
-                .env("WINEPREFIX", wine_prefix)
-                .env("PROTONPATH", proton_tool);
         }
         TrainerEnv::Managed => {}
     }
@@ -1436,13 +1385,6 @@ mod tests {
         assert!(!wineserver_running(Path::new(
             "/nonexistent-prefix-xyz/pfx"
         )));
-    }
-
-    #[test]
-    fn umu_args_are_wellformed() {
-        let (program, args) = umu_run_args(Path::new("/opt/Aurora.exe"));
-        assert_eq!(program, PathBuf::from("umu-run"));
-        assert_eq!(args, vec![PathBuf::from("/opt/Aurora.exe")]);
     }
 
     #[test]

@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Heroic Proton trainers now connect to the game's wineserver as a
+  client: the app waits until the game executable actually starts
+  (umu's `proton waitforexitandrun <exe>` chain) and then runs the
+  trainer with the game's Proton in `run` mode. The umu-run attempt
+  was wrong: umu also launches through `waitforexitandrun`, whose
+  `wineserver -w` waits for the game's server to die, so the trainer
+  only opened after the game closed. Verified live: game and trainer
+  coexist on the one shared wineserver.
 - Heroic Proton trainers now wait for the game EXECUTABLE to run
   (detecting umu's `proton waitforexitandrun <exe>` chain) instead
   of the wineserver socket: the socket appears during the prefix
