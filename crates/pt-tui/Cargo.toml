@@ -11,5 +11,9 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-thiserror.workspace = true
+crossterm.workspace = true
+pt-core.workspace = true
+pt-discover.workspace = true
+pt-trainers.workspace = true
+ratatui.workspace = true
 tracing.workspace = true

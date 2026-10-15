@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pt-tui`: ratatui interface — game list, running-process check,
+  trainer entry list, and apply/dry-run views, keyboard-driven and
+  readable at any terminal size. The state machine is pure and
+  backend-driven (effects behind a `TuiBackend` trait); rendering is
+  covered by TestBackend tests at normal and tiny sizes; the terminal
+  loop restores the terminal on exit, error, and panic.
+- Freeze entries: after a successful apply, frozen values are
+  re-applied (~30 Hz) in the background while the TUI session is open,
+  and stopped when it ends.
+- CLI: `attach <trainer-id>` (read-only dry-run plan), `apply
+  <trainer-id> --dry-run|--apply` (dry-run by default, writes only
+  with `--apply`), and `tui` (interactive). Headless commands share
+  the same workflow functions as the TUI.
+- `--trainers-dir` option; default resolution: explicit flag, then
+  `$XDG_CONFIG_HOME/proton-trainer/trainers`, then `./trainers`.
+
+### Fixed
+
+- The pattern scan no longer swallows `EPERM` and dead-target errors:
+  a blocked scan now reports the actionable ptrace situation (exact
+  `setcap`/`sysctl` fix) instead of a misleading "pattern not found".
+
 - `pt-trainers`: TOML trainer definitions (game metadata, executable
   names, entries with a hex search pattern supporting `??` wildcards,
   a value offset, typed values `i32`/`i64`/`f32`/`f64`/`bytes`, and a

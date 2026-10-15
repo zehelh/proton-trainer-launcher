@@ -4,10 +4,9 @@ An open-source Linux game trainer for **single-player** games running under
 Steam Proton/Wine. Written in Rust. No anti-cheat bypass — online and
 competitive games are out of scope, forever.
 
-> **Status: pre-alpha (milestone P3).** The workspace structure, CI,
-> Steam discovery, the memory engine, and trainer definitions are in
-> place. The TUI and the attach/apply commands land with milestone P4.
-> See the roadmap below.
+> **Status: pre-alpha (milestone P4).** The workspace, CI, Steam
+> discovery, the memory engine, trainer definitions, and the TUI are in
+> place. Packaging lands with milestone P5. See the roadmap below.
 
 ## Principles
 
@@ -107,18 +106,24 @@ executable or any of its mapped files match, attach is **refused**
 with a plain-English explanation. There is no bypass and there never
 will be: proton-trainer targets single-player games only.
 
-### Planned (milestone P4)
+### Attach, apply, and the TUI (milestone P4)
 
-```text
-proton-trainer attach <game> --dry-run               # show the write plan
-proton-trainer apply <game> --apply                  # apply trainer values
+Trainer definitions are resolved from `--trainers-dir`, then
+`$XDG_CONFIG_HOME/proton-trainer/trainers`, then `./trainers`.
+
+```bash
+proton-trainer attach <trainer-id>            # read-only: print the write plan
+proton-trainer apply <trainer-id>             # dry-run: same plan, nothing written
+proton-trainer apply <trainer-id> --apply     # write, verified, target resumed
+proton-trainer tui                            # interactive interface
 ```
 
-The memory engine backing those commands is complete (`pt-core`):
-every write is validated against one mapped writable region, applied
-while the target is briefly stopped, read back and verified, and the
-target is always resumed — even on errors. See the crate docs
-(`cargo doc --open -p pt-core`).
+The TUI flow: game list → running-process check (denylist applied) →
+trainer entry list (Space toggles, `a` plan+apply) → dry-run plan →
+apply results. Entries marked `[freeze]` are re-applied in the
+background while the session stays open. Attach is always refused with
+a plain-English explanation when the target matches the anti-cheat
+denylist, and blocked memory access reports the exact ptrace fix.
 
 ## Logging
 

@@ -99,24 +99,30 @@ fn scan_slice(pattern: &Pattern, data: &[u8], base_addr: u64) -> Vec<u64> {
 /// matching address.
 ///
 /// The scan reads while the target is running (SIGSTOP is only used
-/// around writes); chunks that fail to read are skipped, which keeps
-/// the scan resilient to a live target re-arranging its memory.
+/// around writes); chunks that fail to read for ordinary reasons are
+/// skipped, which keeps the scan resilient to a live target
+/// re-arranging its memory. Permission denials (`EPERM`) and dead
+/// targets are propagated, never swallowed, so a blocked scan is
+/// reported as the actionable ptrace situation instead of a false
+/// "pattern not found".
 ///
 /// # Errors
 ///
-/// Returns [`CoreError::Io`] when `/proc/<pid>/maps` cannot be read.
+/// Returns [`CoreError::Io`] when `/proc/<pid>/maps` cannot be read,
+/// and [`CoreError::PtraceDenied`] or [`CoreError::ProcessGone`] when
+/// memory access is denied or the target died.
 pub fn scan_process(pid: i32, pattern: &Pattern) -> Result<Vec<u64>, CoreError> {
     let regions = read_maps(pid)?;
     let mut matches = Vec::new();
     for region in regions.iter().filter(|region| region.is_scan_candidate()) {
-        matches.extend(scan_region(pid, region, pattern));
+        matches.extend(scan_region(pid, region, pattern)?);
     }
     matches.sort_unstable();
     Ok(matches)
 }
 
 /// Scans one region in chunks with overlap.
-fn scan_region(pid: i32, region: &Region, pattern: &Pattern) -> Vec<u64> {
+fn scan_region(pid: i32, region: &Region, pattern: &Pattern) -> Result<Vec<u64>, CoreError> {
     let mut matches = Vec::new();
     let pattern_len = pattern.len() as u64;
     let mut chunk_start = region.start;
@@ -132,6 +138,20 @@ fn scan_region(pid: i32, region: &Region, pattern: &Pattern) -> Vec<u64> {
                     .saturating_sub(pattern_len - 1)
                     .max(chunk_start + 1);
             }
+            // Permission and liveness problems are never transient:
+            // skipping them would turn a blocked scan into a
+            // misleading "pattern not found". Propagate them so the
+            // user gets the actionable ptrace message instead.
+            Err(error)
+                if matches!(
+                    error,
+                    CoreError::PtraceDenied { .. } | CoreError::ProcessGone { .. }
+                ) =>
+            {
+                return Err(error);
+            }
+            // Ordinary read failures on live targets (page unmapped
+            // under us mid-scan) skip just the affected chunk.
             Err(error) => {
                 tracing::debug!(
                     region_start = chunk_start,
@@ -142,7 +162,7 @@ fn scan_region(pid: i32, region: &Region, pattern: &Pattern) -> Vec<u64> {
             }
         }
     }
-    matches
+    Ok(matches)
 }
 
 #[cfg(test)]

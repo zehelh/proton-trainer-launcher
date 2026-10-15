@@ -33,9 +33,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
+crossterm = "0.28"
 dirs = "6"
 libc = "0.2"
 proptest = "1"
+ratatui = "0.29"
 tempfile = "3"
 
 pt-core = { path = "crates/pt-core", version = "0.1.0" }
